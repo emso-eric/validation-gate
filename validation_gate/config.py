@@ -131,8 +131,8 @@ class Config:
         path = os.path.join(self.repo_root, DATABASE_ENV_FILE)
         if not os.path.isfile(path):
             raise ConfigError(
-                f"no environment file at {path}. Create it with "
-                f"'cp .env.template .env', or pass the whole connection string "
+                f"no environment file at {path}. Configure this deployment with "
+                f"'./gate.py autodeploy', or pass the whole connection string "
                 f"in $GATE_DATABASE_URL."
             )
 

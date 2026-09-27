@@ -12,6 +12,7 @@ The EMSO Validation Gate command line.
     ./gate.py list blocked    list datasets by status, grouped by facility
     ./gate.py init-db         create the schema and exit
 
+    ./gate.py autodeploy      configure a fresh checkout: .env files + secrets
     ./gate.py password-rotate new secrets in .env, applied to the services
 
 Exit codes, because CI reads them:
@@ -198,6 +199,132 @@ def _rewrite_env(path: str, updates: dict[str, str]) -> list[str]:
     shutil.copymode(path, tmp)
     os.replace(tmp, path)
     return missing
+
+
+# ---------------------------------------------------------------------------
+# Everything a deployment needs before `docker compose` will even parse its own
+# file. Compose fails with "env file ... not found" on a missing env_file, so
+# all four must exist - not just the one that carries secrets.
+DEPLOYMENT_FILES = (
+    (".env.template", ".env"),
+    ("database/.env.template", "database/.env"),
+    ("erddap/.env.template", "erddap/.env"),
+    ("grafana/.env.template", "grafana/.env"),
+)
+
+
+def cmd_autodeploy(args: argparse.Namespace, cfg: Config) -> int:
+    """
+    Turn a fresh checkout into a configured one.
+
+    Only files are touched: nothing is started, and an existing .env is never
+    overwritten. Secrets are *generated into* the root .env rather than applied
+    to a running service, because on a first deployment there is no server yet -
+    postgres reads POSTGRES_PASSWORD when it initialises its cluster. Rotating
+    later, against running services, is `password-rotate`.
+    """
+    root = cfg.repo_root
+    missing = [(t, live) for t, live in DEPLOYMENT_FILES
+               if not os.path.isfile(os.path.join(root, live))]
+    present = [live for _, live in DEPLOYMENT_FILES
+               if os.path.isfile(os.path.join(root, live))]
+
+    if not missing:
+        print("This deployment is already configured:")
+        for live in present:
+            print(f"  {live}")
+        print()
+        print("Nothing to do - no existing file is ever overwritten. To replace")
+        print("the secrets in .env on the running services, use:")
+        print()
+        print("    ./gate.py password-rotate")
+        return EXIT_OK
+
+    absent = [t for t, _ in missing if not os.path.isfile(os.path.join(root, t))]
+    if absent:
+        logger.error("missing template(s): %s", ", ".join(absent))
+        logger.error("this does not look like a complete checkout")
+        return EXIT_ERROR
+
+    # Secrets are only generated when we create the root .env ourselves. If it
+    # already exists it may hold the password of a live database, and silently
+    # replacing that would lock the gate out of its own history.
+    fresh_root = any(live == DATABASE_ENV_FILE for _, live in missing)
+
+    print("This deployment is not configured yet.")
+    print()
+    print("Will create from templates:")
+    for _, live in missing:
+        print(f"  {live}")
+    if present:
+        print()
+        print("Will keep untouched:")
+        for live in present:
+            print(f"  {live}")
+    print()
+    if fresh_root:
+        print(f"and generate {len(ROTATED_SECRETS)} random secrets in "
+              f"{DATABASE_ENV_FILE}.")
+    else:
+        print(f"{DATABASE_ENV_FILE} already exists, so its secrets are left "
+              f"alone.")
+
+    if not args.yes:
+        if not sys.stdin.isatty():
+            logger.error(
+                "refusing to write without confirmation: re-run with --yes"
+            )
+            return EXIT_ERROR
+        if input("Continue? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("nothing changed")
+            return EXIT_OK
+
+    print()
+    for tmpl, live in missing:
+        shutil.copyfile(os.path.join(root, tmpl), os.path.join(root, live))
+        print(f"created {live}")
+
+    if fresh_root:
+        env_path = os.path.join(root, DATABASE_ENV_FILE)
+        # Only this file holds secrets, so only this one is tightened.
+        os.chmod(env_path, 0o600)
+
+        updates = {name: _new_secret() for name in ROTATED_SECRETS}
+        # The host user that owns the checkout. The template guesses 1000, which
+        # is wrong often enough to be worth reading for real: a root-owned
+        # artefact in the working tree is what stops ./gate.py afterwards.
+        if hasattr(os, "getuid"):
+            updates["UID"] = str(os.getuid())
+            updates["GID"] = str(os.getgid())
+        _rewrite_env(env_path, updates)
+        print(f"generated {len(ROTATED_SECRETS)} secrets in {DATABASE_ENV_FILE} "
+              f"(mode 600)")
+        if "UID" in updates:
+            print(f"set UID={updates['UID']} GID={updates['GID']} from this host")
+
+        # Empty .env plus a populated cluster means the password we just
+        # invented does not match the one postgres already has.
+        pgdata = os.path.join(root, "database", "pgdata")
+        if os.path.isdir(pgdata) and os.listdir(pgdata):
+            print()
+            logger.warning(
+                "%s already contains a cluster, which keeps its existing "
+                "password - the one just generated will not authenticate "
+                "against it", pgdata
+            )
+            logger.warning(
+                "restore the previous .env, or delete %s to start over "
+                "(this destroys the validation history)", pgdata
+            )
+
+    print()
+    print("Next, edit .env for this host - at minimum ERDDAP_baseUrl, which")
+    print("ERDDAP writes into every link and metadata record - then:")
+    print()
+    print("    docker compose up -d")
+    print("    ./gate.py init-db")
+    print("    ./gate.py run new")
+    return EXIT_OK
 
 
 def cmd_password_rotate(args: argparse.Namespace, cfg: Config) -> int:
@@ -419,6 +546,7 @@ COMMANDS = {
     "list": cmd_list,
     "init-db": cmd_init_db,
     "password-rotate": cmd_password_rotate,
+    "autodeploy": cmd_autodeploy,
 }
 
 
@@ -454,6 +582,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--trigger", default="manual",
                      choices=("manual", "push", "schedule"),
                      help="recorded against the run, for the audit trail")
+
+    deploy = sub.add_parser(
+        "autodeploy", parents=[common],
+        help="create the missing .env files from their templates and generate "
+             "secrets")
+    deploy.add_argument("--yes", action="store_true",
+                        help="do not ask for confirmation")
 
     rotate = sub.add_parser(
         "password-rotate", parents=[common],
