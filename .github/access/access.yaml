@@ -1,0 +1,36 @@
+# Who may change what, by folder.
+#
+# This file is READ BY CI, so it must be committed. Keep GitHub usernames only -
+# no email addresses, no institution contact details. The usernames are already
+# visible to anyone who can read the commit history, so there is nothing here
+# that needs hiding; an email address would be.
+#
+# Enforcement, weakest last:
+#
+#   1. A push ruleset rejects the push outright, server-side. Strongest, but it
+#      can only express one restricted scope for the whole repository, so it
+#      covers the current two-user setup and not thirteen facilities. See
+#      .github/access/README.md.
+#   2. The "Enforce access rules" step in .github/workflows/validate.yml fails
+#      the run, so `gate.py run` never executes and an unauthorised change
+#      never reaches the central ERDDAP. This is what scales to one group per
+#      facility.
+#
+# Group names are arbitrary labels. A user may appear in several groups; a
+# group may own several folders. `folders: ["*"]` means the whole repository.
+
+administrators:
+  # Full access: gate code, workflows, this file, every facility.
+  folders: ["*"]
+  users:
+    - EnocMartinez
+
+Balearic_Sea:
+  # The OBSEA regional facility, and nothing else.
+  #
+  # The directory is federation/Balearic_Sea, not federation/Balearic_Sea: the
+  # federation/ layout mirrors the emso-erddap facility directories, so
+  # Balearic_Sea no longer exists.
+  folders: ["federation/Balearic_Sea"]
+  users:
+    - enoc-martinez-emso
