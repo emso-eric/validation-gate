@@ -13,7 +13,7 @@
 # Pinned exactly. A minor bump can change scores, and an unexplained
 # federation-wide score shift is the worst kind of incident - the audit trail in
 # database/sql/ depends on being able to say which engine produced a number.
-emso-metadata-harmonizer==1.1.0.dev2
+emso-metadata-harmonizer==1.1.0
 
 psycopg2-binary>=2.9,<3
 PyYAML>=6.0
