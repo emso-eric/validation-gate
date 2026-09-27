@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 .env
 */.env
-!*.env.example
+!*.env.template
 
 # Personal information: real names and GitHub usernames. Commit
 # access.yaml.template instead.

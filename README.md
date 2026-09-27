@@ -72,10 +72,10 @@ answers it. **A dataset whose latest verdict is not `healthy` is dropped from
 data. What it does by hand:
 
 ```bash
-cp .env.example .env                        # then fill in POSTGRES_PASSWORD
-cp database/.env.example database/.env      # the values must match
-cp erddap/.env.example erddap/.env          # at minimum, set ERDDAP_baseUrl
-cp grafana/.env.example grafana/.env
+cp .env.template .env                        # then fill in POSTGRES_PASSWORD
+cp database/.env.template database/.env      # the values must match
+cp erddap/.env.template erddap/.env          # at minimum, set ERDDAP_baseUrl
+cp grafana/.env.template grafana/.env        # then fill in the admin password
 
 docker compose up -d database erddap grafana
 docker compose run --rm gate init-db
