@@ -35,8 +35,8 @@ class GateDatabase:
     def __init__(self, url: str, repo_root: str = ".") -> None:
         if not url:
             raise DatabaseError(
-                "no database configured: set database_url in "
-                "validation-gate.yaml or $GATE_DATABASE_URL"
+                "no database configured: point database_env_file in "
+                "validation-gate.yaml at a .env file, or set $GATE_DATABASE_URL"
             )
         self.url = url
         self.repo_root = os.path.abspath(repo_root)

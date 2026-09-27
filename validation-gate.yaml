@@ -42,9 +42,15 @@ config:
   cache_dir: cache/.emso
 
   # --- database ------------------------------------------------------------
-  # Overridden by $GATE_DATABASE_URL, which is how the container and CI get it.
-  # Never commit real credentials here.
-  database_url: "postgresql://gate:change-me@127.0.0.1:5432/emso_gate"
+  # Nothing to configure here, on purpose: this file is committed, so it holds
+  # no credentials and not even a path to them. The gate reads the repository
+  # root .env - the same file docker-compose.yaml uses - and builds
+  #
+  #     postgresql://POSTGRES_USER:POSTGRES_PASSWORD@POSTGRES_HOST:POSTGRES_PORT/POSTGRES_DB
+  #
+  # $GATE_DATABASE_URL overrides that: it is how docker-compose.yaml reaches
+  # the database by its service name from inside the network, and how CI passes
+  # a secret. Rotate the password with `./gate.py password-rotate`.
 
   # --- execution -----------------------------------------------------------
   # The whole compliance pass is parallel: init_emso_metadata() downloads

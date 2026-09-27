@@ -19,9 +19,17 @@
 #     docker compose run --rm gate run all --trigger schedule
 #     docker compose run --rm gate status
 #
-# Credentials come from .env (see .env.example), which Docker Compose reads
-# automatically for both ${VAR} interpolation and env_file. Nothing secret
-# belongs in this file.
+# Configuration is two-layered, and every service gets both:
+#
+#   .env            deployment: every address, port, host and password, for all
+#                   services at once. This is the file you edit on a new server.
+#   <service>/.env  service-specific tuning that does not change between
+#                   deployments.
+#
+# env_file order matters: the service file is listed second, so it wins where
+# the same variable appears in both. Compose also reads the root .env
+# automatically for ${VAR} interpolation below. Nothing secret belongs in this
+# file.
 # ---------------------------------------------------------------------------
 
 services:
@@ -32,7 +40,14 @@ services:
     restart: unless-stopped
     hostname: erddap
     env_file:
+      - .env
       - erddap/.env
+    environment:
+      # The container writes erddap/data as this user. Taken from the root .env
+      # so there is one place that says which host user owns the bind mounts,
+      # rather than a second pair of variables that can drift from UID/GID.
+      TOMCAT_USER_ID: "${UID:-1000}"
+      TOMCAT_GROUP_ID: "${GID:-1000}"
     ports:
       - "${ERDDAP_PORT:-8080}:8080"
     volumes:
@@ -56,6 +71,7 @@ services:
     restart: always
     hostname: database
     env_file:
+      - .env
       - database/.env
     volumes:
       - ./database/pgdata:/var/lib/postgresql/data
@@ -79,6 +95,7 @@ services:
       database:
         condition: service_healthy
     env_file:
+      - .env
       - grafana/.env
     environment:
       # Consumed by grafana/provisioning/datasources/gate.yaml, so the
@@ -106,7 +123,12 @@ services:
     depends_on:
       database:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
+      # Overrides POSTGRES_HOST/POSTGRES_PORT from the root .env, which point at
+      # the *published* address for a gate running on the host. Inside the
+      # compose network the database answers to its service name instead.
       GATE_DATABASE_URL: postgresql://${POSTGRES_USER:-gate}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB:-emso_gate}
     # Run as the invoking user, not root. Everything the gate writes -
     # datasets.xml, its backups, logs/, the engine cache - lands in the

@@ -5,6 +5,13 @@
 */.env
 !*.env.template
 
+# Backups written by `gate.py password-rotate`, and its temporary file. These
+# hold the PREVIOUS passwords, so they are exactly as secret as .env itself.
+*.env.bckp.*
+.env.bckp.*
+*.env.tmp
+.env.tmp
+
 # Personal information: real names and GitHub usernames. Commit
 # access.yaml.template instead.
 .github/access/access.yaml

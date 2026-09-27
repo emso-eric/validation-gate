@@ -12,6 +12,8 @@ The EMSO Validation Gate command line.
     ./gate.py list blocked    list datasets by status, grouped by facility
     ./gate.py init-db         create the schema and exit
 
+    ./gate.py password-rotate new secrets in .env, applied to the services
+
 Exit codes, because CI reads them:
 
     0   the run completed and every checked dataset is healthy
@@ -31,12 +33,18 @@ import argparse
 import csv
 import logging
 import os
+import re
+import secrets
+import shutil
+import subprocess
 import sys
+from datetime import datetime
 
 from validation_gate import (
     Config, ConfigError, DatabaseError, ErddapError, RegistryError,
     ValidationGate, __version__,
 )
+from validation_gate.config import DATABASE_ENV_FILE, read_env_file
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -129,6 +137,185 @@ def cmd_init_db(args: argparse.Namespace, cfg: Config) -> int:
         gate.connect()
     print("schema is up to date")
     return EXIT_OK
+
+
+# ---------------------------------------------------------------------------
+# Every secret in the root .env, and what has to happen for a new value to take
+# effect. Editing the file is never enough on its own:
+#
+#   POSTGRES_PASSWORD           the postgres image reads this at initdb only, so
+#                               an existing cluster keeps the old password until
+#                               ALTER ROLE changes it. Done here.
+#   GF_SECURITY_ADMIN_PASSWORD  Grafana copies this into its own database on
+#                               first start and ignores it afterwards. Reset
+#                               here with grafana-cli.
+#   ERDDAP_flagKeyKey           read once at startup, so it applies on the next
+#                               `docker compose up -d erddap`. Every flag URL
+#                               issued under the old key stops working.
+ROTATED_SECRETS = (
+    "POSTGRES_PASSWORD",
+    "GF_SECURITY_ADMIN_PASSWORD",
+    "ERDDAP_flagKeyKey",
+)
+
+GRAFANA_CONTAINER = "emso-gate-grafana"
+
+
+def _new_secret() -> str:
+    # token_urlsafe: A-Za-z0-9-_ only, so it needs no quoting in a .env file, no
+    # escaping in a URL and no special handling in a shell.
+    return secrets.token_urlsafe(24)
+
+
+def _rewrite_env(path: str, updates: dict[str, str]) -> list[str]:
+    """
+    Replace values in place, keeping every comment and the original order.
+
+    Returns the names that were not found, so the caller can report rather than
+    silently lose a rotated secret. Written via a temporary file and os.replace,
+    so an interrupted rotation cannot leave a half-written .env.
+    """
+    lines: list[str] = []
+    seen: set[str] = set()
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)=", line)
+            if match and match.group(1) in updates:
+                name = match.group(1)
+                lines.append(f"{name}={updates[name]}\n")
+                seen.add(name)
+            else:
+                lines.append(line)
+
+    missing = [name for name in updates if name not in seen]
+    if missing:
+        lines.append("\n# Added by `gate.py password-rotate`.\n")
+        lines.extend(f"{name}={updates[name]}\n" for name in missing)
+
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+    shutil.copymode(path, tmp)
+    os.replace(tmp, path)
+    return missing
+
+
+def cmd_password_rotate(args: argparse.Namespace, cfg: Config) -> int:
+    env_path = os.path.join(cfg.repo_root, DATABASE_ENV_FILE)
+    if not os.path.isfile(env_path):
+        logger.error("no environment file at %s", env_path)
+        return EXIT_ERROR
+
+    current = read_env_file(env_path)
+    role = current.get("POSTGRES_USER")
+    if not role:
+        logger.error("%s: POSTGRES_USER is not set", env_path)
+        return EXIT_ERROR
+
+    if not args.yes:
+        if not sys.stdin.isatty():
+            logger.error(
+                "refusing to rotate without confirmation: re-run with --yes"
+            )
+            return EXIT_ERROR
+        print(f"Rotate {', '.join(ROTATED_SECRETS)} in {env_path},")
+        print(f"change the password of PostgreSQL role '{role}', and reset the")
+        print("Grafana admin password. Existing ERDDAP flag URLs will stop")
+        print("working once ERDDAP is recreated.")
+        if input("Continue? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("nothing changed")
+            return EXIT_OK
+
+    new = {name: _new_secret() for name in ROTATED_SECRETS}
+
+    # PostgreSQL first, using the *old* credentials from cfg. If this fails the
+    # deployment is still entirely consistent, because .env is untouched.
+    import psycopg2
+    from psycopg2 import sql
+    try:
+        with psycopg2.connect(cfg.database_url) as conn:
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                # psycopg2 interpolates client-side, so %s becomes a correctly
+                # escaped literal: ALTER ROLE does not take bind parameters.
+                cur.execute(
+                    sql.SQL("ALTER ROLE {} WITH PASSWORD %s").format(
+                        sql.Identifier(role)
+                    ),
+                    (new["POSTGRES_PASSWORD"],),
+                )
+    except psycopg2.Error as exc:
+        logger.error("could not change the password of role '%s': %s", role, exc)
+        logger.error("nothing was written; %s is unchanged", env_path)
+        return EXIT_ERROR
+    logger.info("PostgreSQL role '%s': password changed", role)
+
+    # The database now disagrees with .env, so write it immediately. If this
+    # fails, the new password is printed rather than lost.
+    backup = f"{env_path}.bckp.{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    try:
+        shutil.copy2(env_path, backup)
+        missing = _rewrite_env(env_path, new)
+    except OSError as exc:
+        logger.error("could not write %s: %s", env_path, exc)
+        logger.error(
+            "the database password IS now '%s' - set POSTGRES_PASSWORD to it "
+            "by hand before running the gate again",
+            new["POSTGRES_PASSWORD"],
+        )
+        return EXIT_ERROR
+    logger.info("backed up %s", os.path.basename(backup))
+    for name in missing:
+        logger.warning("%s was not in the file and has been appended", name)
+
+    # Grafana keeps its own copy, so the new value in .env only applies to a
+    # fresh grafana/data. Non-fatal: the rotation above already succeeded.
+    grafana = _reset_grafana_password(
+        args.grafana_container, new["GF_SECURITY_ADMIN_PASSWORD"]
+    )
+
+    print()
+    print(f"Rotated {len(ROTATED_SECRETS)} secrets in {env_path}")
+    print(f"  previous values: {os.path.basename(backup)}")
+    print(f"  PostgreSQL role '{role}': applied")
+    print(f"  Grafana admin: {'applied' if grafana else 'NOT applied - see above'}")
+    print("  ERDDAP flagKeyKey: applies on the next recreate:")
+    print()
+    print("      docker compose up -d erddap")
+    print()
+    if not grafana:
+        print("  Grafana keeps the old password until you run:")
+        print()
+        print(f"      docker exec {args.grafana_container} grafana-cli "
+              f"admin reset-admin-password '<the value now in .env>'")
+        print()
+    return EXIT_OK
+
+
+def _reset_grafana_password(container: str, password: str) -> bool:
+    if not shutil.which("docker"):
+        logger.warning("docker not on PATH; Grafana admin password not reset")
+        return False
+    try:
+        result = subprocess.run(
+            ["docker", "exec", container,
+             "grafana-cli", "admin", "reset-admin-password", password],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("could not reset the Grafana admin password: %s", exc)
+        return False
+    if result.returncode != 0:
+        # Most often: the container is not running. Worth a warning, not a
+        # failure - the value is in .env and applies to a fresh grafana/data.
+        logger.warning(
+            "grafana-cli failed (exit %d): %s",
+            result.returncode,
+            (result.stderr or result.stdout).strip().splitlines()[-1:] or "",
+        )
+        return False
+    logger.info("Grafana admin password reset in %s", container)
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +418,7 @@ COMMANDS = {
     "status": cmd_status,
     "list": cmd_list,
     "init-db": cmd_init_db,
+    "password-rotate": cmd_password_rotate,
 }
 
 
@@ -266,6 +454,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--trigger", default="manual",
                      choices=("manual", "push", "schedule"),
                      help="recorded against the run, for the audit trail")
+
+    rotate = sub.add_parser(
+        "password-rotate", parents=[common],
+        help="generate new secrets in .env and apply them to the services")
+    rotate.add_argument("--yes", action="store_true",
+                        help="do not ask for confirmation")
+    rotate.add_argument("--grafana-container", default=GRAFANA_CONTAINER,
+                        metavar="NAME",
+                        help=f"container to reset the Grafana admin password "
+                             f"in (default: {GRAFANA_CONTAINER})")
 
     sub.add_parser("check", parents=[common],
                    help="validate the registry and print it (no database)")
