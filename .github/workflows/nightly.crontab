@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# Nightly sweep, on the host that runs the central node.
+#
+# Not a GitHub `schedule:` trigger on purpose. A scheduled workflow only fires
+# when the self-hosted runner is online, and GitHub delays scheduled runs
+# under load - sometimes by tens of minutes, sometimes silently skipping them.
+# For a job whose whole purpose is "notice that a regional server changed
+# something while nobody was looking", that is the wrong reliability.
+#
+# Install (inspect the existing crontab first, never replace it):
+#
+#     crontab -l > /tmp/current.crontab
+#     cat .github/workflows/nightly.crontab >> /tmp/current.crontab
+#     crontab /tmp/current.crontab
+#     crontab -l
+#
+# The push-triggered run in validate.yml stays as it is: this is the sweep,
+# that is the gate.
+# ---------------------------------------------------------------------------
+
+# Where the repository is checked out on this host. Adjust both lines.
+# `run pending` re-checks everything that is not currently healthy - blocked,
+# unreachable, unhandled and anything newly declared - so a facility that fixed
+# its metadata overnight is picked up without touching the registry, and a
+# healthy federation costs nothing.
+
+# m  h  dom mon dow  command
+  17 2  *   *   *    cd /srv/emso-validation-gate && git pull --ff-only --quiet && ./gate.py run pending --trigger schedule >> /var/log/emso-gate.log 2>&1
+
+# A full re-validation once a week, so a dataset that has been quietly passing
+# for months is still re-checked against the current specifications.
+  17 3  *   *   0    cd /srv/emso-validation-gate && ./gate.py run all --trigger schedule >> /var/log/emso-gate.log 2>&1
+
+# Without the engine installed on the host, swap ./gate.py for ./gate.sh and
+# these become `docker compose run --rm gate ...` instead.
+
+# 02:17 rather than 02:00: every cron job on every host in the world fires on
+# the hour, and the regional ERDDAPs being probed are on those hosts.

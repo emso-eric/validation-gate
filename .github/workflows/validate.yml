@@ -1,0 +1,143 @@
+# ---------------------------------------------------------------------------
+# The validation gate, on every push, plus an on-demand re-check.
+#
+#   push              -> run new      only datasets never validated before, so
+#                                     adding one dataset scores one dataset,
+#                                     not 208.
+#   workflow_dispatch -> run pending  everything not currently healthy. This is
+#                                     the button a facility presses after it
+#                                     has fixed its metadata: nothing in the
+#                                     registry changed, so `new` would find
+#                                     nothing, but `pending` re-checks it.
+#
+# workflow_dispatch already requires write permission on the repository, so
+# every facility that can push its own config can also trigger this, and nobody
+# else can. There is no extra permission to configure.
+#
+# Two jobs on purpose. `check` parses the registry offline and `run` is skipped
+# if it fails, which matters because the gate builds the federation
+# all-or-nothing: one malformed YAML file raises and no datasets.xml is
+# written. Failing here means the live federation keeps serving the previous
+# file, instead of one facility's bad push taking every facility down with it.
+#
+# The nightly sweep is NOT here: a GitHub `schedule:` only fires when the
+# self-hosted runner is online and is delayed under load. See
+# .github/workflows/nightly.crontab.
+# ---------------------------------------------------------------------------
+name: validation-gate
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Which datasets to validate"
+        type: choice
+        options: [pending, new, all]
+        default: pending
+
+# One gate run at a time. Two concurrent runs would race on datasets.xml and
+# the loser would deploy a stale file. The gate also holds a PostgreSQL
+# advisory lock, which is what serialises this against the nightly crontab;
+# this group just avoids queueing runs that would exit 2 on arrival.
+concurrency:
+  group: validation-gate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Where the central node is checked out on the runner's host - the same
+  # directory the nightly crontab uses. The gate must run against the
+  # deployment, not against the runner's throwaway workspace, or it would write
+  # datasets.xml where no ERDDAP is reading it and re-download the ~115 MB
+  # compliance cache on every push.
+  #
+  # Override with a repository variable if the path differs.
+  GATE_DEPLOYMENT: ${{ vars.GATE_DEPLOYMENT || '/srv/emso-validation-gate' }}
+
+jobs:
+  check:
+    name: registry
+    runs-on: [self-hosted, validation-gate]
+    # Parsing 16 YAML files is a seconds-long job. If it hangs, something is
+    # wrong with the runner, not the registry.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail with a sentence somebody can act on, rather than "No such file or
+      # directory" from the line below.
+      - name: Check the runner is provisioned
+        run: |
+          if [ ! -x "$GATE_DEPLOYMENT/venv/bin/python" ]; then
+            echo "::error::no interpreter at $GATE_DEPLOYMENT/venv/bin/python." \
+                 "This runner must have the deployment checked out at" \
+                 "\$GATE_DEPLOYMENT with its venv created" \
+                 "(python3 -m venv venv && venv/bin/pip install -r requirements.txt)."
+            exit 1
+          fi
+
+      # Runs against the pushed commit in the runner's own workspace, before
+      # the deployment is touched. Offline: no database, no compliance engine.
+      # Borrows the deployment's venv rather than installing dependencies on
+      # every push.
+      - name: Validate the registry
+        run: >-
+          "$GATE_DEPLOYMENT/venv/bin/python" gate.py check --log-dir ''
+
+  run:
+    name: validate and federate
+    needs: check
+    runs-on: [self-hosted, validation-gate]
+    # `run all` probes 208 datasets on third-party servers. Generous, but
+    # bounded: without this, one hung HTTP request holds the advisory lock and
+    # every later run exits 2 until somebody notices.
+    timeout-minutes: 120
+    steps:
+      # --ff-only is the safety property: if the deployment has local commits or
+      # has diverged, this fails loudly instead of discarding them.
+      - name: Fast-forward the deployment to this commit
+        run: |
+          cd "$GATE_DEPLOYMENT"
+          git fetch --quiet origin
+          git merge --ff-only --quiet "$GITHUB_SHA"
+          echo "deployment now at $(git rev-parse --short HEAD)"
+
+      - name: Validate, record and federate
+        env:
+          GATE_DATABASE_URL: ${{ secrets.GATE_DATABASE_URL }}
+          MODE: ${{ inputs.mode || 'new' }}
+          TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'push' }}
+        run: |
+          cd "$GATE_DEPLOYMENT"
+          set +e
+          ./gate.py run "$MODE" --trigger "$TRIGGER"
+          rc=$?
+          set -e
+          case "$rc" in
+            0) echo "::notice::gate run '$MODE': every checked dataset is healthy" ;;
+            1) echo "::warning::gate run '$MODE': completed, but some datasets are blocked or unreachable - see the summary" ;;
+            2) echo "::error::another gate instance holds the advisory lock; nothing was validated or deployed"; exit 1 ;;
+            *) echo "::error::gate failed to run (exit $rc)"; exit "$rc" ;;
+          esac
+
+      # Exit 1 means "the run completed and something is not healthy", which is
+      # the normal state of a federation of third-party servers, not a build
+      # failure. Only exit 2 and above fail the job, so these counts are what a
+      # facility actually reads after pressing the button.
+      - name: Federation summary
+        if: always()
+        env:
+          GATE_DATABASE_URL: ${{ secrets.GATE_DATABASE_URL }}
+        run: |
+          cd "$GATE_DEPLOYMENT"
+          {
+            echo '### Federation status'
+            echo
+            echo '```'
+            ./gate.py summary --log-dir '' || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
