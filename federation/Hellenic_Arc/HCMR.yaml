@@ -1,0 +1,30 @@
+# Hellenic_Arc - datasets federated from https://erddap.ath.hcmr.gr/erddap
+#
+# A datasetID with nothing after it uses the defaults: tabledap, and
+# the URL derived as <url>/<type>/<datasetID>. Add a body only to
+# override one of those or to set a defaultQuery.
+#
+# Migrated from the config/<Facility>/ layout.
+service:
+  url: https://erddap.ath.hcmr.gr/erddap
+  datasets:
+    Pylos_20071109_20080227:
+    Pylos_20080228_20081109:
+    Pylos_20081110_20090303:
+    Pylos_20090304_20091128:
+    Pylos_20091129_20100709:
+    Pylos_20100710_20110227:
+    Pylos_20110228_20120212:
+    Pylos_20120213_20130411:
+    Pylos_20130412_20140117:
+    Pylos_20140118_20141114:
+    Pylos_20141115_20150708:
+    Pylos_20150709_20160714:
+    Pylos_20160715_20170415:
+    Pylos_20170416_20180521:
+    Pylos_20180522_20190721:
+    Pylos_20190722_20200901:
+    Pylos_20200902_20210909:
+    Pylos_20210910_20221220:
+    Pylos_20221221_20240309:
+    Pylos_20221221_NRT:

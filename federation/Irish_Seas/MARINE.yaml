@@ -1,0 +1,19 @@
+# Irish_Seas - datasets federated from https://erddap.marine.ie/erddap
+#
+# A datasetID with nothing after it uses the defaults: tabledap, and
+# the URL derived as <url>/<type>/<datasetID>. Add a body only to
+# override one of those or to set a defaultQuery.
+#
+# Migrated from the config/<Facility>/ layout.
+service:
+  url: https://erddap.marine.ie/erddap
+  datasets:
+    smartbay_obs_15min_mean:
+    smartbay_obs_acoustic:
+    smartbay_obs_adcp:
+    smartbay_obs_ctd_idronaut:
+    smartbay_obs_ctd_sbe16:
+    smartbay_obs_daily_mean:
+    smartbay_obs_fluorometer_ecofl:
+    smartbay_obs_hour_mean:
+    smartbay_obs_pco2_contros:

@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<erddapDatasets>
+<!-- GENERAL INFORMATION
+The information in this file specifies which datasets your ERDDAP will serve.
+The initial version of this file has a few examples which should work for you.
+But after your initial experiments with ERDDAP, 
+you should replace them with information for your datasets.
+
+You can change this document (e.g., add datasets, change metadata) while ERDDAP is running. 
+The changes will be detected the next time this document is read
+(as often as setup.xml loadDatasetsMinMinutes).
+
+Each dataset has a reloadEveryNMinutes value (default = 10080 (one week)).
+When this document is reread, datasets that haven't been been reloaded in 
+their reloadEveryNMinutes will be reloaded.
+You only need to specify a reloadEveryNMinutes value if you anticipate that
+the dataset will change periodically.
+
+If this document has an xml error, processing will stop and an email
+will be sent to emailEverythingTo as specified in setup.xml.
+
+If you want to remove a dataset while ERDDAP is running, add 
+	active="false"
+to the dataset tag.  For example,
+	<dataset type="EDDGridFromDap" datasetID="erdMHchla8day" active="false">
+
+For more information, see 
+http://coastwatch.pfel.noaa.gov/erddap/download/setupDatasetsXml.html
+-->
+<startBodyHtml5><![CDATA[
+<body>
+<table class="compact nowrap" style="width:100%; background-color:#393b3f;">
+  <tr>
+    <td style="text-align:center; width:80px;"><a rel="bookmark"
+      href="https://emso.eu/"><img
+      title="EMSO ERIC"
+      src="&erddapUrl;/images/logo.png" alt="EMSO" height="90" width="142"
+      style="vertical-align:middle;"></a></td>
+    <td style="text-align:left; font-size:x-large; color:#FFFFFF; ">
+      <strong>EMSO ERIC ERDDAP</strong>
+      <br><small><small><small>Easier access to scientific data</small></small></small>
+      </td>
+    <td style="text-align:right; font-size:small;  color:#FFFFFF; ">
+      &loginInfo; | &language; &nbsp; &nbsp;
+      <br>&BroughtToYouBy;
+      <a title="EMSO" rel="bookmark"  href="https://emso.eu/" style="color:#7C87DF;">EMSO</a>
+      &nbsp; &nbsp;
+      </td>
+  </tr>
+</table>
+]]></startBodyHtml5>
+  <theShortDescriptionHtml>
+        &lt;h1&gt;ERDDAP&lt;/h1&gt;
+        ERDDAP is a data server that gives you a simple, consistent way to download
+        subsets of scientific datasets in common file formats and make graphs and maps.
+        This particular ERDDAP installation has oceanographic data from EMSO ERIC.
+
+        Last configuration update at __DATASETS_XML_BUILD_DATE__
+
+        [standardShortDescriptionHtml]
+
+    </theShortDescriptionHtml>
+<!-- If you want to refuse requests from certain clients
+(e.g., to fend off a Denial of Service attack or an overly zealous web robot), 
+add their numeric IP address (e.g., 123.45.67.89) to this comma-separated list. 
+You can also replace the last number in an IP address with * to block 0-255 (e.g., 123.45.67.*).
+See your ERDDAP daily report for a list/tally of the most active requesters. -->
+<requestBlacklist></requestBlacklist>
+
+<!-- Blacklisted IP addresses often have troublesome scripts that make
+rapid-fire, repeated, bad requests.
+With this setting, you can slow down the response to blacklisted IP addresses 
+or other failed requests by some number of milliseconds. 
+Recommendations:
+* If the trouble is a Distributed Denial Of Service (DDOS) attack from 100+
+attackers, set this to a smaller number (0? 10? 100?).
+Slowing them all down for too long leads to too many waiting threads.
+* If the trouble is from 1-10 sources, set this to 1000 ms (the default).
+That slows them down so they waste fewer network resources.
+Also, 1000 ms won't annoy human users who make a bad request.
+-->
+<slowDownTroubleMillis>1000</slowDownTroubleMillis>
+
+<!-- If you want to prevent specific people from using the email/URL subscription
+	system, uncomment the following tag and add their email addresses to the comma-separated list. 
+<subscriptionEmailBlacklist>some.name@company.com, another.name@company.com</subscriptionEmailBlacklist>
+-->
+
+<!-- These convert the local sourceUrl (used in dataset tags) 
+into the public sourceUrl (which appears in a dataset's globalAttributes).
+This is only needed if some datasets use non-public sourceUrl's
+(usually because their computer is in your DMZ or a local LAN). 
+'from' and 'to' are the start of the URLs and are case sensitive.
+'from' must be '[something]//[something]/' . 
+For example,
+<convertToPublicSourceUrl from="http://192.168.31.18/" to="http://oceanwatch.pfeg.noaa.gov/" />
+will cause a matching local sourceUrl (such as http://192.168.31.18/thredds/dodsC/satellite/BA/ssta/5day)
+into a public sourceUrl (http://oceanwatch.pfeg.noaa.gov/thredds/dodsC/satellite/BA/ssta/5day). 
+-->
+<!--
+<convertToPublicSourceUrl from="http://192.168.31.18/" to="http://oceanwatch.pfeg.noaa.gov/" />
+<convertToPublicSourceUrl from="http://192.168.31.27/" to="http://thredds1.pfeg.noaa.gov/"   />
+-->
+
+<!-- =========================================================================================== -->
+<!--                                                                                             -->
+<!--   GENERATED FILE - DO NOT EDIT BY HAND                                                      -->
+<!--                                                                                             -->
+<!--   Built by the EMSO CI/CD validation gate from the YAML registry in config/.                -->
+<!--   Only datasets that passed validation against the EMSO Metadata Specifications             -->
+<!--   are present here. To add or remove a dataset, edit config/<Facility>/*.yaml               -->
+<!--   and commit: the gate rebuilds this file.                                                  -->
+<!--                                                                                             -->
+<!--   Build date     : __DATASETS_XML_BUILD_DATE__                                              -->
+<!--   Datasets served: __DATASETS_XML_COUNT__                                                   -->
+<!--                                                                                             -->
+<!-- =========================================================================================== -->

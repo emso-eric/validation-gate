@@ -1,0 +1,357 @@
+{
+  "uid": "emso-dataset-history",
+  "title": "EMSO Dataset History",
+  "description": "Every score one dataset has ever had. How a facility proves a fix worked, and how a federation-wide shift is traced to the run that introduced it.",
+  "tags": ["emso", "federation", "gate"],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5m",
+  "time": { "from": "now-90d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "description": "Which gate database these panels read.",
+        "type": "datasource",
+        "query": "postgres",
+        "current": {},
+        "options": [],
+        "refresh": 1,
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "skipUrlSync": false
+      },
+      {
+        "name": "facility",
+        "label": "Facility",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "${datasource}" },
+        "definition": "SELECT DISTINCT facility FROM v_dataset_current ORDER BY 1",
+        "query": "SELECT DISTINCT facility FROM v_dataset_current ORDER BY 1",
+        "current": {},
+        "options": [],
+        "refresh": 1,
+        "hide": 0,
+        "includeAll": true,
+        "multi": false,
+        "allValue": "%",
+        "skipUrlSync": false,
+        "sort": 1
+      },
+      {
+        "name": "dataset",
+        "label": "Dataset",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "${datasource}" },
+        "definition": "SELECT dataset_id FROM v_dataset_current WHERE facility LIKE '$facility' ORDER BY 1",
+        "query": "SELECT dataset_id FROM v_dataset_current WHERE facility LIKE '$facility' ORDER BY 1",
+        "current": {},
+        "options": [],
+        "refresh": 1,
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "skipUrlSync": false,
+        "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Current status",
+      "datasource": { "type": "postgres", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "healthy": { "color": "green", "index": 0, "text": "healthy" } } },
+            { "type": "value", "options": { "blocked": { "color": "red", "index": 1, "text": "blocked" } } },
+            { "type": "value", "options": { "unreachable": { "color": "orange", "index": 2, "text": "unreachable" } } },
+            { "type": "value", "options": { "unhandled": { "color": "yellow", "index": 3, "text": "unhandled" } } },
+            { "type": "value", "options": { "pending": { "color": "blue", "index": 4, "text": "pending" } } }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT status FROM v_dataset_current WHERE dataset_id = '$dataset';",
+          "datasource": { "type": "postgres", "uid": "${datasource}" }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Required score",
+      "datasource": { "type": "postgres", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 70 },
+              { "color": "green", "value": 90 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT required_score FROM v_dataset_current WHERE dataset_id = '$dataset';",
+          "datasource": { "type": "postgres", "uid": "${datasource}" }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Operational",
+      "datasource": { "type": "postgres", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "true": { "color": "green", "index": 0, "text": "pass" } } },
+            { "type": "value", "options": { "false": { "color": "red", "index": 1, "text": "FAIL" } } }
+          ],
+          "noValue": "not scored"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT operational_passed FROM v_dataset_current WHERE dataset_id = '$dataset';",
+          "datasource": { "type": "postgres", "uid": "${datasource}" }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Keywords",
+      "datasource": { "type": "postgres", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "true": { "color": "green", "index": 0, "text": "pass" } } },
+            { "type": "value", "options": { "false": { "color": "red", "index": 1, "text": "FAIL" } } }
+          ],
+          "noValue": "not scored"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT keywords_passed FROM v_dataset_current WHERE dataset_id = '$dataset';",
+          "datasource": { "type": "postgres", "uid": "${datasource}" }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Score history",
+      "description": "Required and optional percentages over every run that scored this dataset, against the threshold in force at the time.",
+      "datasource": { "type": "postgres", "uid": "${datasource}" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 4 },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "required" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } },
+              { "id": "custom.lineWidth", "value": 3 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "optional" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "threshold" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+              { "id": "custom.showPoints", "value": "never" }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time AS \"time\", required_score AS required, optional_score AS optional, threshold FROM v_score_history WHERE dataset_id = '$dataset' AND $__timeFilter(time) ORDER BY time;",
+          "datasource": { "type": "postgres", "uid": "${datasource}" }
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Every validation on record",
+      "datasource": { "type": "postgres", "uid": "${datasource}" },
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 14 },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [{ "displayName": "time", "desc": true }]
+      },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "filterable": true } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "healthy": { "color": "green", "index": 0, "text": "healthy" } } },
+                  { "type": "value", "options": { "blocked": { "color": "red", "index": 1, "text": "blocked" } } },
+                  { "type": "value", "options": { "unreachable": { "color": "orange", "index": 2, "text": "unreachable" } } },
+                  { "type": "value", "options": { "unhandled": { "color": "yellow", "index": 3, "text": "unhandled" } } }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": ".*score.*|threshold" },
+            "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 1 }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT time, status, required_score, optional_score, threshold, operational_passed, keywords_passed, specs_version, harmonizer_version, run_id FROM v_score_history WHERE dataset_id = '$dataset' ORDER BY time DESC LIMIT 200;",
+          "datasource": { "type": "postgres", "uid": "${datasource}" }
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "table",
+      "title": "Why it is not federated",
+      "description": "The failing rules from the latest validation, or the error when the dataset was never scored.",
+      "datasource": { "type": "postgres", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 25 },
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "filterable": false } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "reason" },
+            "properties": [{ "id": "custom.width", "value": 900 }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT unnest(COALESCE(failures, ARRAY[error_message])) AS reason, last_checked_at FROM v_dataset_current WHERE dataset_id = '$dataset' AND status <> 'healthy';",
+          "datasource": { "type": "postgres", "uid": "${datasource}" }
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "type": "table",
+      "title": "Declaration",
+      "description": "What federation/ says about this dataset, and where to change it.",
+      "datasource": { "type": "postgres", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 32 },
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT facility, service, service_url, source_url, protocol, erddap_type, registry_path, institution, emso_facility FROM v_dataset_current WHERE dataset_id = '$dataset';",
+          "datasource": { "type": "postgres", "uid": "${datasource}" }
+        }
+      ]
+    }
+  ]
+}

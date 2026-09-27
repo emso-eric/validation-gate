@@ -1,0 +1,19 @@
+# South_Adriatic_Sea - datasets federated from https://bo.isp.cnr.it/erddap
+#
+# A datasetID with nothing after it uses the defaults: tabledap, and
+# the URL derived as <url>/<type>/<datasetID>. Add a body only to
+# override one of those or to set a defaultQuery.
+#
+# Migrated from the config/<Facility>/ layout.
+service:
+  url: https://bo.isp.cnr.it/erddap
+  datasets:
+    BB_505_ADCP:
+    BB_567_SBE56:
+    BB_584_SBE56:
+    BB_591_SBE56:
+    BB_595_CTD:
+    FF_644_ADCP:
+    FF_700_SBE56:
+    FF_717_SBE56:
+    FF_734_CTD:

@@ -1,0 +1,68 @@
+# Azores - datasets federated from https://erddap.emso-fr.org/erddap
+#
+# A datasetID with nothing after it uses the defaults: tabledap, and
+# the URL derived as <url>/<type>/<datasetID>. Add a body only to
+# override one of those or to set a defaultQuery.
+#
+# Migrated from the config/<Facility>/ layout.
+service:
+  url: https://erddap.emso-fr.org/erddap
+  datasets:
+    EMSO-AZORES_Borel_Meteo-Unit-1_2010-2011:
+    EMSO-AZORES_Borel_Meteo-Unit-1_2011-2012:
+    EMSO-AZORES_Borel_Meteo-Unit-1_2012-2013:
+    EMSO-AZORES_Borel_Meteo-Unit-1_2013-2014:
+    EMSO-AZORES_Borel_Meteo-Unit-1_2014-2015:
+    EMSO-AZORES_Borel_Meteo-Unit-1_2015-2016:
+    EMSO-AZORES_Borel_Meteo-Unit-1_2016-2017:
+    EMSO-AZORES_Borel_Meteo-Unit-2_2016-2017:
+    EMSO-AZORES_CHEMINI_Total-Iron_2011-2012:
+    EMSO-AZORES_CHEMINI_Total-Iron_2013-2014:
+    EMSO-AZORES_CHEMINI_Total-Iron_2014-2015:
+    EMSO-AZORES_CHEMINI_Total-Iron_2016-2017:
+    EMSO-AZORES_CHEMINI_Total-Iron_2017-2018:
+    EMSO-AZORES_CHEMINI_Total-Iron_2018-2019:
+    EMSO-AZORES_CHEMINI_Total-Iron_2019-2020:
+    EMSO-AZORES_EGIM_Optode-O2_2017-2018:
+    EMSO-AZORES_EGIM_Precise-Pressure_2017-2018:
+    EMSO-AZORES_EGIM_TEMP-CNDC-PRES_2017-2018:
+    EMSO-AZORES_EGIM_Turbidity_2017-2018:
+    EMSO-AZORES_SBE53_East_2016_2017:
+    EMSO-AZORES_SBE53_East_2018_2019:
+    EMSO-AZORES_SBE53_East_2019_2020:
+    EMSO-AZORES_SBE53_West_2016_2017:
+    EMSO-AZORES_SBE53_West_2018_2019:
+    EMSO-AZORES_SBE53_West_2019_2020:
+    EMSO-AZORES_Seamon-East_Optode-O2_2012-2013:
+    EMSO-AZORES_Seamon-East_Optode-O2_2013-2014:
+    EMSO-AZORES_Seamon-East_Optode-O2_2015-2016:
+    EMSO-AZORES_Seamon-East_Optode-O2_2016-2017:
+    EMSO-AZORES_TCM3-1_2016-2017:
+    EMSO-AZORES_TCM3-1_2017-2018:
+    EMSO-AZORES_TCM3-1_2018-2019:
+    EMSO-AZORES_TCM3-1_2021-2022:
+    EMSO-AZORES_TCM3-2_2017-2018:
+    EMSO-AZORES_TCM3-2_2018-2019:
+    EMSO-AZORES_TCM3-2_2019-2020:
+    EMSO-AZORES_TCM3-2_2020-2021:
+    EMSO-AZORES_TCM3-3_2016-2017:
+    EMSO-AZORES_TCM3-3_2017-2018:
+    EMSO-AZORES_TCM3-3_2018-2019:
+    EMSO-AZORES_TCM3-3_2019-2020:
+    EMSO-AZORES_TCM3-3_2020-2021:
+    EMSO-AZORES_TCM3-3_2021-2022:
+    EMSO-AZORES_TCM3-A_2020-2021:
+    EMSO-AZORES_TCM3-B_2020-2021:
+    EMSO-AZORES_TCM3-B_2021-2022:
+    EMSO-AZORES_TCM3-C_2020-2021:
+    EMSO-AZORES_TCM3-C_2021-2022:
+    EMSO-AZORES_TCM3-D_2020-2021:
+    EMSO-AZORES_TCM3-D_2021-2022:
+    EMSO-AZORES_Wetlabs_Turbidity_2011-2012:
+    EMSO-AZORES_Wetlabs_Turbidity_2012-2013:
+    EMSO-AZORES_Wetlabs_Turbidity_2013-2014:
+    EMSO-AZORES_Wetlabs_Turbidity_2015-2016:
+    EMSO-AZORES_Wetlabs_Turbidity_2016-2017:
+    EMSO-AZORES_Wetlabs_Turbidity_2017-2018:
+    Emso_Azores_Chemini_IRON:
+      defaultQuery: time%2CTEMP&time>=2017-01-01T00%3A00%3A00Z&time<=2017-07-15T00%3A00%3A00Z&.draw=lines&.color=0x000000&.bgColor=0xffccccff

@@ -1,0 +1,35 @@
+# The gate database, provisioned rather than clicked.
+#
+# Credentials come from the environment (set by docker-compose.yaml from the
+# repository-root .env), so this file is safe to commit and there is only one
+# place the password lives.
+#
+# editable: true so the connection can be repointed from the Grafana UI. Every
+# dashboard panel reads its datasource from the ${datasource} variable rather
+# than hard-coding this uid, so adding a second database here is enough to
+# switch a dashboard over to it from the dropdown at the top.
+apiVersion: 1
+
+datasources:
+  - name: EMSO Gate
+    uid: emso-gate-db
+    type: postgres
+    access: proxy
+    url: ${GATE_DB_HOST}
+    user: ${GATE_DB_USER}
+    isDefault: true
+    editable: true
+    secureJsonData:
+      password: ${GATE_DB_PASSWORD}
+    jsonData:
+      # The database MUST live here, not as a top-level `database:` key. The
+      # plugin is `grafana-postgresql-datasource` (top-level `database` is the
+      # pre-Grafana-11 spelling and is silently ignored), and it reads this as
+      # `preconfiguredDatabase`. When it is empty the plugin refuses to run any
+      # query client-side with "You do not currently have a default database
+      # configured for this data source" - no request ever reaches the server,
+      # so the database logs look perfectly healthy while every panel is empty.
+      database: ${GATE_DB_NAME}
+      sslmode: disable
+      postgresVersion: 1700
+      timescaledb: false

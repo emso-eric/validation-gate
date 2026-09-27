@@ -1,0 +1,18 @@
+# Western_Mediterranean - datasets federated from http://erddap.w1m3a.cnr.it/erddap
+#
+# A datasetID with nothing after it uses the defaults: tabledap, and
+# the URL derived as <url>/<type>/<datasetID>. Add a body only to
+# override one of those or to set a defaultQuery.
+#
+# Migrated from the config/<Facility>/ layout.
+service:
+  url: http://erddap.w1m3a.cnr.it/erddap
+  datasets:
+    W1M3A_deploy01:
+    W1M3A_deploy02:
+    W1M3A_deploy03:
+    W1M3A_deploy04:
+    W1M3A_deploy05:
+    W1M3A_deploy06:
+    W1M3A_deploy07:
+    W1M3A_deploy08:

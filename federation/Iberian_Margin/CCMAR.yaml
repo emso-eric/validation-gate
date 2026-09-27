@@ -1,0 +1,19 @@
+# Iberian_Margin - datasets federated from https://erddap.ccmar.ualg.pt/erddap
+#
+# A datasetID with nothing after it uses the defaults: tabledap, and
+# the URL derived as <url>/<type>/<datasetID>. Add a body only to
+# override one of those or to set a defaultQuery.
+#
+# Migrated from the config/<Facility>/ layout.
+service:
+  url: https://erddap.ccmar.ualg.pt/erddap
+  datasets:
+    CAC_WW_d01_20220414_to_20220426_v002:
+    IBMA-CSV_ADCP_d01_20210524_to_20210609_v002:
+    IBMA-CSV_ADCP_d02_20220531_to_20221006_v002:
+    IBMA-CSV_EGIM_ADCP_D01_20220531_to_20221006_v002:
+    IBMA-CSV_EGIM_CT_D01_20220531_to_20221006_v002:
+    IBMA-CSV_EGIM_DO_D01_20220531_to_20221006_v002:
+    IBMA-CSV_EGIM_PRES_D01_20220531_to_20221006_v002:
+    IBMA-CSV_EGIM_TUR_D01_20220531_to_20221006_v002:
+    IBMA-CSV_WW_D02_20220531_to_20221006_v002:

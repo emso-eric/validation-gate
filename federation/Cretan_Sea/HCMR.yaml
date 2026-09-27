@@ -1,0 +1,26 @@
+# Cretan_Sea - datasets federated from https://erddap.ath.hcmr.gr/erddap
+#
+# A datasetID with nothing after it uses the defaults: tabledap, and
+# the URL derived as <url>/<type>/<datasetID>. Add a body only to
+# override one of those or to set a defaultQuery.
+#
+# Migrated from the config/<Facility>/ layout.
+service:
+  url: https://erddap.ath.hcmr.gr/erddap
+  datasets:
+    E1M3A_20070528_20080226:
+    E1M3A_20080227_20090725:
+    E1M3A_20090726_20100707:
+    E1M3A_20100708_20110827:
+    E1M3A_20110828_20130521:
+    E1M3A_20130522_20141009:
+    E1M3A_20141010_20160712:
+    E1M3A_20160713_20170415:
+    E1M3A_20170416_20180623:
+    E1M3A_20180624_20190717:
+    E1M3A_20190718_20201126:
+    E1M3A_20201127_20210912:
+    E1M3A_20210913_20221201:
+    E1M3A_20221202_20240312:
+    E1M3A_20240313_20241126:
+    E1M3A_20240313_NRT:

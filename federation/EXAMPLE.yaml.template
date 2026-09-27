@@ -1,0 +1,24 @@
+service:
+  url: "https://data.obsea.es"  # /erddap is appended when missing
+
+  datasets:
+    OBSEA_seabed_station_TS_L1b:  # bare entry: tabledap, URL derived from service URL
+    OBSEA_seabed_station_TS_L1c:
+      # Override the source URL (rarely needed; only when the dataset is not
+      # at <service_url>/<type>/<datasetID>).
+      url: "https://different.url/erddap/tabledap/OBSEA_seabed_station_TS_L1c"
+
+      # type: tabledap (default) | griddap
+      type: "tabledap"
+
+      # defaultQuery: percent-encoded; becomes <defaultGraphQuery> in datasets.xml.
+      defaultQuery: "time%2CTEMP%2CTIME_QC&amp;time&gt;2015-04-15T00%3A00%3A00Z&amp;time&lt;2015-04-22T00%3A00%3A00Z&amp;DEPH=1500.0&amp;.draw=linesAndMarkers&amp;.marker=6|3&amp;.color=0x000000&amp;.colorBar=|||||&amp;.bgColor=0xffccccff"
+
+
+
+
+
+
+
+
+

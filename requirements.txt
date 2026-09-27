@@ -1,0 +1,20 @@
+# EMSO Validation Gate - runtime dependencies
+#
+#     pip install -r requirements.txt
+#
+# Docker is optional: with these installed, ./gate.py works directly against
+# any reachable PostgreSQL. The container exists so the gate can also run on a
+# host without the compiled netCDF/UDUNITS libraries the engine needs.
+
+# The compliance engine. The same package the regional facilities run locally
+# for shift-left pre-validation, which is what makes the central audit
+# reproduce the tenant's own result rather than merely resembling it.
+#
+# Pinned exactly. A minor bump can change scores, and an unexplained
+# federation-wide score shift is the worst kind of incident - the audit trail in
+# database/sql/ depends on being able to say which engine produced a number.
+emso-metadata-harmonizer==1.1.0.dev2
+
+psycopg2-binary>=2.9,<3
+PyYAML>=6.0
+rich>=13.0

@@ -1,0 +1,13 @@
+# Western_Ionian_Sea - datasets federated from http://erddap.moist.it/erddap
+#
+# A datasetID with nothing after it uses the defaults: tabledap, and
+# the URL derived as <url>/<type>/<datasetID>. Add a body only to
+# override one of those or to set a defaultQuery.
+#
+# Migrated from the config/<Facility>/ layout.
+service:
+  url: http://erddap.moist.it/erddap
+  datasets:
+    EMSO_Western_Ionian_Sea_CTD_2002_2003:
+    EMSO_Western_Ionian_Sea_CTD_2012_2013:
+    EMSO_Western_Ionian_Sea_PRESSURE_GAUGE_2012_2013:

@@ -1,0 +1,74 @@
+# ---------------------------------------------------------------------------
+# EMSO Validation Gate - central policy
+#
+# This file belongs to the central team, not to the facilities: the threshold
+# and the specifications version decide who gets federated. The facilities own
+# federation/, which says which datasets exist.
+#
+# Paths are relative to the repository root.
+# ---------------------------------------------------------------------------
+
+config:
+
+  # --- verdict -------------------------------------------------------------
+  # A dataset is healthy, and therefore federated, when all the enforced rules
+  # below hold. Anything else is blocked.
+
+  # Percentage of the specification's REQUIRED attributes the dataset passes.
+  # The optional percentage is recorded and reported, never gated on.
+  threshold: 90.0
+
+  # Operational tests check that the data is actually usable: valid
+  # variable_type, mandatory coordinates, resolvable sensor_id and platform_id.
+  operational_required: true
+
+  # Keyword tests check that every keyword resolves in a controlled vocabulary.
+  keywords_required: true
+
+  # --- specifications ------------------------------------------------------
+  # Pinned on purpose: with a floating version a federation-wide score shift
+  # could come from the specifications rather than from the data, and telling
+  # those apart after the fact is the hard part of any compliance incident.
+  specs_version: "v1.0.7"
+
+  # --- paths ---------------------------------------------------------------
+  federation_dir: federation
+  datasets_xml: erddap/datasets.xml
+  erddap_data_dir: erddap/data
+  templates_dir: erddap/templates
+  # The compliance engine resolves its cache by the literal name '.emso'
+  # relative to its working directory, which is why this path ends in it. Keep
+  # it on persistent storage: a cold cache re-downloads ~50 resources.
+  cache_dir: cache/.emso
+
+  # --- database ------------------------------------------------------------
+  # Overridden by $GATE_DATABASE_URL, which is how the container and CI get it.
+  # Never commit real credentials here.
+  database_url: "postgresql://gate:change-me@127.0.0.1:5432/emso_gate"
+
+  # --- execution -----------------------------------------------------------
+  # The whole compliance pass is parallel: init_emso_metadata() downloads
+  # everything up front, after which metadata_report() only reads. Datasets are
+  # interleaved by server, so this many workers does not mean this many
+  # simultaneous requests to one regional ERDDAP.
+  workers: 20
+
+  # How the central ERDDAP is told to pick up a change. All three touch only
+  # the datasets that changed; the rest of the federation keeps serving.
+  #
+  # hardflag -> touch erddap/data/hardFlag/<datasetID>. Reloads the dataset AND
+  #             discards ERDDAP's cached copy of its structure. The default,
+  #             because every dataset here is an EDD*FromErddap proxy: what
+  #             gets cached is the *regional* dataset's variable list, so after
+  #             a facility adds a variable a soft flag reloads the dataset
+  #             while keeping the stale shape.
+  # flag     -> touch erddap/data/flag/<datasetID>. Cheaper, and correct when
+  #             only the data behind an unchanged structure moved.
+  # none     -> write datasets.xml only. For a read-only or dry-run host.
+  reload_method: hardflag
+
+  # <reloadEveryNMinutes> written into each dataset block.
+  reload_minutes: 60
+
+  # Timestamped datasets.xml backups to keep.
+  keep_backups: 10

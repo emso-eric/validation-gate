@@ -1,0 +1,13 @@
+# Nordic_Seas - datasets federated from https://erddap.hi.no/erddap
+#
+# A datasetID with nothing after it uses the defaults: tabledap, and
+# the URL derived as <url>/<type>/<datasetID>. Add a body only to
+# override one of those or to set a defaultQuery.
+#
+# Migrated from the config/<Facility>/ layout.
+service:
+  url: https://erddap.hi.no/erddap
+  datasets:
+    NorEMSO_StationM:
+    NorEMSO_Svinoy_North:
+    NorEMSO_Svinoy_South:
