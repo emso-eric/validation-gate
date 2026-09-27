@@ -42,8 +42,8 @@ import sys
 from datetime import datetime
 
 from validation_gate import (
-    Config, ConfigError, DatabaseError, ErddapError, RegistryError,
-    ValidationGate, __version__,
+    Config, ConfigError, DatabaseError, ErddapError, ErddapHelper,
+    RegistryError, ValidationGate, __version__,
 )
 from validation_gate.config import DATABASE_ENV_FILE, read_env_file
 
@@ -315,6 +315,33 @@ def cmd_autodeploy(args: argparse.Namespace, cfg: Config) -> int:
             logger.warning(
                 "restore the previous .env, or delete %s to start over "
                 "(this destroys the validation history)", pgdata
+            )
+
+    # docker-compose.yaml bind-mounts erddap/datasets.xml as a *file*. Docker
+    # creates any missing bind-mount source itself, and for a path it has never
+    # seen it creates a directory - so `docker compose up` on a fresh checkout
+    # leaves a directory where ERDDAP's configuration should be, which ERDDAP
+    # cannot read and which the gate then cannot overwrite with a file.
+    #
+    # Writing it here is the same content the gate writes when nothing is
+    # federated yet: header, banner, no dataset blocks, footer. ERDDAP starts
+    # with an empty federation, and `./gate.py run new` fills it in.
+    datasets_xml = cfg.path("datasets_xml")
+    relative = os.path.relpath(datasets_xml, root)
+    if os.path.isfile(datasets_xml):
+        print(f"kept {relative} (already present)")
+    else:
+        try:
+            ErddapHelper(cfg).build_datasets([])
+            print(f"created {relative} (valid, no datasets yet)")
+        except ErddapError as exc:
+            # The env files are already written, so this is a warning rather
+            # than a failure: the deployment is configured, just not startable
+            # until the file exists.
+            logger.warning("could not write %s: %s", relative, exc)
+            logger.warning(
+                "create it before `docker compose up`, or Docker will create a "
+                "directory at that path"
             )
 
     print()
