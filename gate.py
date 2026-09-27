@@ -212,27 +212,128 @@ DEPLOYMENT_FILES = (
     ("grafana/.env.template", "grafana/.env"),
 )
 
+COMPOSE_FILE = "docker-compose.yaml"
+
+
+def _compose_bind_directories(root: str) -> tuple[list[str], list[str]]:
+    """
+    Directory bind-mount sources declared in docker-compose.yaml.
+
+    Docker creates a missing bind-mount source itself, as root and as a
+    *directory* - so a first `docker compose up` on a fresh checkout leaves
+    root-owned directories in the working tree, and where a file was expected
+    (datasets.xml) a directory that ERDDAP cannot read. Creating them here, from
+    the process that already runs as the right user, avoids both.
+
+    Returns (directories, warnings). A source that already exists is left alone.
+    A source that looks like a file - anything with an extension - is not
+    created: datasets.xml is written separately, and logo.png and favicon.ico
+    are in the repository.
+    """
+    path = os.path.join(root, COMPOSE_FILE)
+    if not os.path.isfile(path):
+        return [], [f"no {COMPOSE_FILE}; no directories created"]
+
+    import yaml
+    with open(path, encoding="utf-8") as f:
+        compose = yaml.safe_load(f) or {}
+
+    found: list[str] = []
+    warnings: list[str] = []
+    mounts: list[tuple[str, str]] = []      # (host source, container target)
+
+    for service in (compose.get("services") or {}).values():
+        for volume in (service or {}).get("volumes") or []:
+            if isinstance(volume, dict):
+                if volume.get("type") not in (None, "bind"):
+                    continue
+                source = volume.get("source") or ""
+                target = volume.get("target") or ""
+            else:
+                parts = str(volume).split(":")
+                source = parts[0]
+                target = parts[1] if len(parts) > 1 else ""
+
+            # Named volumes are not paths, and '.' is the repository itself.
+            if not source.startswith((".", "/")):
+                continue
+            if "$" in source:
+                warnings.append(f"{source}: not created, it is interpolated")
+                continue
+            if target:
+                mounts.append((source, target))
+            if source in (".", "./") or os.path.splitext(source)[1]:
+                continue
+
+            absolute = os.path.normpath(os.path.join(root, source))
+            if absolute not in found:
+                found.append(absolute)
+
+    # A mount whose target sits inside another mount's target needs its mount
+    # point to exist first. Docker creates a missing one as root even when the
+    # container runs as someone else, and because the outer source is on the
+    # host, that root-owned directory appears in the working tree - where it
+    # cannot be removed without sudo. Pre-creating it is the whole fix.
+    for outer_source, outer_target in mounts:
+        if os.path.splitext(outer_source)[1]:
+            continue
+        for inner_source, inner_target in mounts:
+            if inner_target == outer_target:
+                continue
+            prefix = outer_target.rstrip("/") + "/"
+            if not inner_target.startswith(prefix):
+                continue
+            inside = inner_target[len(prefix):]
+            # Only directories: a nested *file* mount point is created as an
+            # empty file, which is harmless and not ours to guess at.
+            if os.path.splitext(inside)[1]:
+                continue
+            absolute = os.path.normpath(
+                os.path.join(root, outer_source, inside)
+            )
+            if absolute not in found:
+                found.append(absolute)
+
+    return found, warnings
+
 
 def cmd_autodeploy(args: argparse.Namespace, cfg: Config) -> int:
     """
-    Turn a fresh checkout into a configured one.
+    Turn a fresh checkout into a startable one.
 
-    Only files are touched: nothing is started, and an existing .env is never
-    overwritten. Secrets are *generated into* the root .env rather than applied
+    Three independent things, each skipped when already done, so this is safe to
+    re-run after any of them has been removed by hand:
+
+      1. the four .env files, copied from their templates
+      2. every directory docker-compose.yaml bind-mounts
+      3. an empty-but-valid erddap/datasets.xml
+
+    Only files are touched: nothing is started, and nothing existing is ever
+    overwritten. Secrets are generated *into* the root .env rather than applied
     to a running service, because on a first deployment there is no server yet -
     postgres reads POSTGRES_PASSWORD when it initialises its cluster. Rotating
     later, against running services, is `password-rotate`.
     """
     root = cfg.repo_root
-    missing = [(t, live) for t, live in DEPLOYMENT_FILES
-               if not os.path.isfile(os.path.join(root, live))]
-    present = [live for _, live in DEPLOYMENT_FILES
-               if os.path.isfile(os.path.join(root, live))]
 
-    if not missing:
-        print("This deployment is already configured:")
-        for live in present:
+    missing_files = [(t, live) for t, live in DEPLOYMENT_FILES
+                     if not os.path.isfile(os.path.join(root, live))]
+    present_files = [live for _, live in DEPLOYMENT_FILES
+                     if os.path.isfile(os.path.join(root, live))]
+
+    directories, warnings = _compose_bind_directories(root)
+    missing_dirs = [d for d in directories if not os.path.isdir(d)]
+
+    datasets_xml = cfg.path("datasets_xml")
+    needs_datasets_xml = not os.path.isfile(datasets_xml)
+
+    if not (missing_files or missing_dirs or needs_datasets_xml):
+        print("This deployment is already complete:")
+        for live in present_files:
             print(f"  {live}")
+        for directory in directories:
+            print(f"  {os.path.relpath(directory, root)}/")
+        print(f"  {os.path.relpath(datasets_xml, root)}")
         print()
         print("Nothing to do - no existing file is ever overwritten. To replace")
         print("the secrets in .env on the running services, use:")
@@ -240,7 +341,8 @@ def cmd_autodeploy(args: argparse.Namespace, cfg: Config) -> int:
         print("    ./gate.py password-rotate")
         return EXIT_OK
 
-    absent = [t for t, _ in missing if not os.path.isfile(os.path.join(root, t))]
+    absent = [t for t, _ in missing_files
+              if not os.path.isfile(os.path.join(root, t))]
     if absent:
         logger.error("missing template(s): %s", ", ".join(absent))
         logger.error("this does not look like a complete checkout")
@@ -249,23 +351,23 @@ def cmd_autodeploy(args: argparse.Namespace, cfg: Config) -> int:
     # Secrets are only generated when we create the root .env ourselves. If it
     # already exists it may hold the password of a live database, and silently
     # replacing that would lock the gate out of its own history.
-    fresh_root = any(live == DATABASE_ENV_FILE for _, live in missing)
+    fresh_root = any(live == DATABASE_ENV_FILE for _, live in missing_files)
 
-    print("This deployment is not configured yet.")
+    print("This deployment is incomplete.")
     print()
-    print("Will create from templates:")
-    for _, live in missing:
-        print(f"  {live}")
-    if present:
-        print()
-        print("Will keep untouched:")
-        for live in present:
-            print(f"  {live}")
-    print()
+    print("Will create:")
+    for _, live in missing_files:
+        print(f"  {live}                    (from its template)")
+    for directory in missing_dirs:
+        print(f"  {os.path.relpath(directory, root)}/")
+    if needs_datasets_xml:
+        print(f"  {os.path.relpath(datasets_xml, root)}   (valid, no datasets)")
     if fresh_root:
+        print()
         print(f"and generate {len(ROTATED_SECRETS)} random secrets in "
               f"{DATABASE_ENV_FILE}.")
-    else:
+    elif missing_files:
+        print()
         print(f"{DATABASE_ENV_FILE} already exists, so its secrets are left "
               f"alone.")
 
@@ -280,7 +382,7 @@ def cmd_autodeploy(args: argparse.Namespace, cfg: Config) -> int:
             return EXIT_OK
 
     print()
-    for tmpl, live in missing:
+    for tmpl, live in missing_files:
         shutil.copyfile(os.path.join(root, tmpl), os.path.join(root, live))
         print(f"created {live}")
 
@@ -291,8 +393,8 @@ def cmd_autodeploy(args: argparse.Namespace, cfg: Config) -> int:
 
         updates = {name: _new_secret() for name in ROTATED_SECRETS}
         # The host user that owns the checkout. The template guesses 1000, which
-        # is wrong often enough to be worth reading for real: a root-owned
-        # artefact in the working tree is what stops ./gate.py afterwards.
+        # is wrong often enough to be worth reading for real: every container
+        # runs as this uid, so it is also what every bind mount must belong to.
         if hasattr(os, "getuid"):
             updates["UID"] = str(os.getuid())
             updates["GID"] = str(os.getgid())
@@ -302,9 +404,32 @@ def cmd_autodeploy(args: argparse.Namespace, cfg: Config) -> int:
         if "UID" in updates:
             print(f"set UID={updates['UID']} GID={updates['GID']} from this host")
 
-        # Empty .env plus a populated cluster means the password we just
-        # invented does not match the one postgres already has.
+    # Created here rather than by Docker, which would make them root-owned.
+    for warning in warnings:
+        logger.warning("%s", warning)
+    for directory in missing_dirs:
+        os.makedirs(directory, exist_ok=True)
+        print(f"created {os.path.relpath(directory, root)}/ "
+              f"(uid {os.stat(directory).st_uid})")
+
+    if needs_datasets_xml:
+        relative = os.path.relpath(datasets_xml, root)
+        try:
+            ErddapHelper(cfg).build_datasets([])
+            print(f"created {relative} (valid, no datasets yet)")
+        except ErddapError as exc:
+            # The rest is already written, so this is a warning rather than a
+            # failure: the deployment is configured, just not startable yet.
+            logger.warning("could not write %s: %s", relative, exc)
+            logger.warning(
+                "create it before `docker compose up`, or Docker will create a "
+                "directory at that path"
+            )
+
+    if fresh_root:
         pgdata = os.path.join(root, "database", "pgdata")
+        # An existing cluster keeps its own password, so the one just generated
+        # will not authenticate against it.
         if os.path.isdir(pgdata) and os.listdir(pgdata):
             print()
             logger.warning(
@@ -315,33 +440,6 @@ def cmd_autodeploy(args: argparse.Namespace, cfg: Config) -> int:
             logger.warning(
                 "restore the previous .env, or delete %s to start over "
                 "(this destroys the validation history)", pgdata
-            )
-
-    # docker-compose.yaml bind-mounts erddap/datasets.xml as a *file*. Docker
-    # creates any missing bind-mount source itself, and for a path it has never
-    # seen it creates a directory - so `docker compose up` on a fresh checkout
-    # leaves a directory where ERDDAP's configuration should be, which ERDDAP
-    # cannot read and which the gate then cannot overwrite with a file.
-    #
-    # Writing it here is the same content the gate writes when nothing is
-    # federated yet: header, banner, no dataset blocks, footer. ERDDAP starts
-    # with an empty federation, and `./gate.py run new` fills it in.
-    datasets_xml = cfg.path("datasets_xml")
-    relative = os.path.relpath(datasets_xml, root)
-    if os.path.isfile(datasets_xml):
-        print(f"kept {relative} (already present)")
-    else:
-        try:
-            ErddapHelper(cfg).build_datasets([])
-            print(f"created {relative} (valid, no datasets yet)")
-        except ErddapError as exc:
-            # The env files are already written, so this is a warning rather
-            # than a failure: the deployment is configured, just not startable
-            # until the file exists.
-            logger.warning("could not write %s: %s", relative, exc)
-            logger.warning(
-                "create it before `docker compose up`, or Docker will create a "
-                "directory at that path"
             )
 
     print()

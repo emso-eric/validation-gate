@@ -42,6 +42,10 @@ services:
     env_file:
       - .env
       - erddap/.env
+    # Deliberately no `user:` here. This image starts its entrypoint as root to
+    # chown /erddapData and then drops to TOMCAT_USER_ID, so forcing the user
+    # would stop it doing either. The Tomcat process still ends up as UID:GID,
+    # which is what matters for the bind mounts.
     environment:
       # The container writes erddap/data as this user. Taken from the root .env
       # so there is one place that says which host user owns the bind mounts,
@@ -70,6 +74,11 @@ services:
     image: postgres:17.11-alpine
     restart: always
     hostname: database
+    # Same user as every other service here, so nothing in the working tree ends
+    # up owned by a uid that cannot be cleaned up without sudo. The postgres
+    # image supports an arbitrary uid provided its data directory already
+    # belongs to that user, which `./gate.py autodeploy` arranges.
+    user: "${UID:-1000}:${GID:-1000}"
     env_file:
       - .env
       - database/.env
@@ -94,6 +103,9 @@ services:
     depends_on:
       database:
         condition: service_healthy
+    # Grafana defaults to uid 472; pinned to the host user for the same reason
+    # as the database, and grafana/data must belong to it.
+    user: "${UID:-1000}:${GID:-1000}"
     env_file:
       - .env
       - grafana/.env
