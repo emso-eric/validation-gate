@@ -1,16 +1,15 @@
 # South_Adriatic_Sea - datasets federated from https://nodc.inogs.it/erddap
 #
-# A datasetID with nothing after it uses the defaults: tabledap, and
-# the URL derived as <url>/<type>/<datasetID>. Add a body only to
-# override one of those or to set a defaultQuery.
-#
-# Migrated from the config/<Facility>/ layout.
+# GENERATED from the emso-erddap XML fragments by federation/.regen_from_xml.py.
+# A datasetID with nothing after it uses the defaults: tabledap, and the URL
+# derived as <url>/<type>/<datasetID>. A body appears only where the fragment
+# needed one.
 service:
   url: https://nodc.inogs.it/erddap
   datasets:
-    E2M3A_2021_2022_TS:
     E2M3A_CTD_meteo_CO2_pH_NRT:
-      url: https://nodc.inogs.it/erddap/tabledap/E2M3A_TS
+      url: "https://nodc.inogs.it/erddap/tabledap/E2M3A_TS"
+    E2M3A_2021_2022_TS:
     E2M3A_METEO:
     E2M3A_MRDT:
     E2M3A_PCO2PROA:

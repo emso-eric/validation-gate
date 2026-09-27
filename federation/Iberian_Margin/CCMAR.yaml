@@ -1,10 +1,9 @@
 # Iberian_Margin - datasets federated from https://erddap.ccmar.ualg.pt/erddap
 #
-# A datasetID with nothing after it uses the defaults: tabledap, and
-# the URL derived as <url>/<type>/<datasetID>. Add a body only to
-# override one of those or to set a defaultQuery.
-#
-# Migrated from the config/<Facility>/ layout.
+# GENERATED from the emso-erddap XML fragments by federation/.regen_from_xml.py.
+# A datasetID with nothing after it uses the defaults: tabledap, and the URL
+# derived as <url>/<type>/<datasetID>. A body appears only where the fragment
+# needed one.
 service:
   url: https://erddap.ccmar.ualg.pt/erddap
   datasets:

@@ -1,49 +1,48 @@
 # Ligurian_Sea - datasets federated from https://erddap.osupytheas.fr/erddap
 #
-# A datasetID with nothing after it uses the defaults: tabledap, and
-# the URL derived as <url>/<type>/<datasetID>. Add a body only to
-# override one of those or to set a defaultQuery.
-#
-# Migrated from the config/<Facility>/ layout.
+# GENERATED from the emso-erddap XML fragments by federation/.regen_from_xml.py.
+# A datasetID with nothing after it uses the defaults: tabledap, and the URL
+# derived as <url>/<type>/<datasetID>. A body appears only where the fragment
+# needed one.
 service:
   url: https://erddap.osupytheas.fr/erddap
   datasets:
     Emso_Western_Ligurian_Albatross_Aquadopp_NetCDF_2014:
-      defaultQuery: time%2CRFVL_X%2C&DEPH=1550.0&.draw=linesAndMarkers&.marker=3|3&.color=0x000000&.colorBar=|||||&.yRange=||false|&.bgColor=0xffccccff
+      defaultQuery: "time%2CRFVL_X%2C&DEPH=1550.0&.draw=linesAndMarkers&.marker=3|3&.color=0x000000&.colorBar=|||||&.yRange=||false|&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Albatross_Aquadopp_NetCDF_2015:
-      defaultQuery: time%2CPRES%2C&DEPH=1500.0&.draw=markers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CPRES%2C&DEPH=1500.0&.draw=markers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Albatross_Aquadopp_NetCDF_2016:
-      defaultQuery: time%2CPRES%2C&DEPH=1700.0&.draw=markers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CPRES%2C&DEPH=1700.0&.draw=markers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Albatross_Aquadopp_NetCDF_2018:
-      defaultQuery: time%2CPRES%2C&DEPH=1200.0&.draw=markers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CPRES%2C&DEPH=1200.0&.draw=markers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Albatross_Aquadopp_NetCDF_2021:
-      defaultQuery: time%2CTEMP%2C&time>2021-07-30T00%3A00%3A00Z&time<2023-05-17T00%3A00%3A00Z&DEPH=1500.0&TEMP<13.4&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP%2C&time>2021-07-30T00%3A00%3A00Z&time<2023-05-17T00%3A00%3A00Z&DEPH=1500.0&TEMP<13.4&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Albatross_Aquadopp_NetCDF_2024:
-      defaultQuery: time,TEMP&DEPH=500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff&time>=max(time)-2days&.timeRange=2,day(s)
-    Emso_Western_Ligurian_Albatross_Microcat_NetCDF_2014:
-      defaultQuery: time%2CTEMP%2CTIME_QC&time>2015-04-15T00%3A00%3A00Z&time<2015-04-22T00%3A00%3A00Z&DEPH=1500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time,TEMP&DEPH=500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff&time>=max(time)-2days&.timeRange=2,day(s)"
     Emso_Western_Ligurian_Albatross_Microcat_NetCDF_2015:
-      defaultQuery: time%2CTEMP%2CTIME_QC&time>2016-05-30T00%3A00%3A00Z&time<2016-06-06T00%3A00%3A00Z&DEPH=1500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP%2CTIME_QC&time>2016-05-30T00%3A00%3A00Z&time<2016-06-06T00%3A00%3A00Z&DEPH=1500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
+    Emso_Western_Ligurian_Albatross_Microcat_NetCDF_2014:
+      defaultQuery: "time%2CTEMP%2CTIME_QC&time>2015-04-15T00%3A00%3A00Z&time<2015-04-22T00%3A00%3A00Z&DEPH=1500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Albatross_Microcat_NetCDF_2016:
-      defaultQuery: time%2CPSAL%2C&time>2017-09-16T00%3A00%3A00Z&time<2018-09-23T00%3A00%3A00Z&DEPH=1000.0&.draw=linesAndMarkers&.marker=3|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CPSAL%2C&time>2017-09-16T00%3A00%3A00Z&time<2018-09-23T00%3A00%3A00Z&DEPH=1000.0&.draw=linesAndMarkers&.marker=3|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Albatross_Microcat_NetCDF_2018:
-      defaultQuery: time%2CTEMP%2C&time>2018-05-01T21%3A31%3A39Z&time<2019-10-02T00%3A00%3A00Z&DEPH=450.0&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP%2C&time>2018-05-01T21%3A31%3A39Z&time<2019-10-02T00%3A00%3A00Z&DEPH=450.0&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Albatross_Microcat_NetCDF_2019:
-      defaultQuery: time%2CTEMP%2C&time>2020-11-03T00%3A00%3A00Z&time<2020-11-10T00%3A00%3A00Z&DEPH=500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP%2C&time>2020-11-03T00%3A00%3A00Z&time<2020-11-10T00%3A00%3A00Z&DEPH=500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Albatross_Microcat_NetCDF_2021:
-      defaultQuery: time%2CTEMP%2C&DEPH=2000.0&time>2023-02-01T00%3A00%3A00Z&time<2023-03-01T00%3A00%3A00Z&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP%2C&DEPH=2000.0&time>2023-02-01T00%3A00%3A00Z&time<2023-03-01T00%3A00%3A00Z&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Albatross_Microcat_NetCDF_2024:
-      defaultQuery: time,TEMP&sensor_theoric_depth=500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff&time>=max(time)-2days&.timeRange=2,day(s)
+      defaultQuery: "time,TEMP&sensor_theoric_depth=500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff&time>=max(time)-2days&.timeRange=2,day(s)"
     Emso_Western_Ligurian_Bathybot_ADCP_NetCDF_2023:
-      url: https://erddap.osupytheas.fr/erddap/tabledap/EMSO_LO_BJS_ADCP_NCF_2023
+      url: "https://erddap.osupytheas.fr/erddap/tabledap/EMSO_LO_BJS_ADCP_NCF_2023"
     Emso_Western_Ligurian_Bathybot_Aquadopp_NetCDF_2023:
-      defaultQuery: time%2CTEMP%2C&time>max(time)-2day&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP%2C&time>max(time)-2day&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Bathybot_Microcat_NetCDF_2023:
-      defaultQuery: time%2CTEMP%2C&time>max(time)-2day&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP%2C&time>max(time)-2day&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_Bathybot_Optodes_NetCDF_2023:
-      defaultQuery: time%2CTEMP%2C&time>max(time)-2day&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP%2C&time>max(time)-2day&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
     Emso_Western_Ligurian_MII_Aquadopp_NetCDF_2017:
     Emso_Western_Ligurian_MII_Cstar_NetCDF_2017:
     Emso_Western_Ligurian_MII_Microcat_NetCDF_2017:
     Emso_Western_Ligurian_MII_Oxygen_NetCDF_2017:
-      defaultQuery: time%2CDOX1%2C&time>2019-07-23T00%3A00%3A00Z&time<2019-07-30T00%3A00%3A00Z&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff
+      defaultQuery: "time%2CDOX1%2C&time>2019-07-23T00%3A00%3A00Z&time<2019-07-30T00%3A00%3A00Z&.draw=linesAndMarkers&.marker=3|5&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"

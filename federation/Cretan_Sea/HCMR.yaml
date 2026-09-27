@@ -1,10 +1,9 @@
 # Cretan_Sea - datasets federated from https://erddap.ath.hcmr.gr/erddap
 #
-# A datasetID with nothing after it uses the defaults: tabledap, and
-# the URL derived as <url>/<type>/<datasetID>. Add a body only to
-# override one of those or to set a defaultQuery.
-#
-# Migrated from the config/<Facility>/ layout.
+# GENERATED from the emso-erddap XML fragments by federation/.regen_from_xml.py.
+# A datasetID with nothing after it uses the defaults: tabledap, and the URL
+# derived as <url>/<type>/<datasetID>. A body appears only where the fragment
+# needed one.
 service:
   url: https://erddap.ath.hcmr.gr/erddap
   datasets:
@@ -23,4 +22,3 @@ service:
     E1M3A_20210913_20221201:
     E1M3A_20221202_20240312:
     E1M3A_20240313_20241126:
-    E1M3A_20240313_NRT:

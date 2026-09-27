@@ -1,10 +1,9 @@
 # Ligurian_Sea - datasets federated from https://erddap.emso-fr.org/erddap
 #
-# A datasetID with nothing after it uses the defaults: tabledap, and
-# the URL derived as <url>/<type>/<datasetID>. Add a body only to
-# override one of those or to set a defaultQuery.
-#
-# Migrated from the config/<Facility>/ layout.
+# GENERATED from the emso-erddap XML fragments by federation/.regen_from_xml.py.
+# A datasetID with nothing after it uses the defaults: tabledap, and the URL
+# derived as <url>/<type>/<datasetID>. A body appears only where the fragment
+# needed one.
 service:
   url: https://erddap.emso-fr.org/erddap
   datasets:
@@ -13,14 +12,14 @@ service:
     EMSO-LIGURE-NICE_ST4-PZ2L-01B_2014-2019:
     EMSO-LIGURE-NICE_ST4-PZ2L-03_2014-2018:
     Emso_Ligure_Dyfamed_FCO2TW:
-      defaultQuery: time%2CTEMP&time>=1995-06-12T00%3A00%3A00Z&time<=1997-12-29T00%3A00%3A00Z&depth=1&.draw=lines&.color=0x000000&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP&time>=1995-06-12T00%3A00%3A00Z&time<=1997-12-29T00%3A00%3A00Z&depth=1&.draw=lines&.color=0x000000&.bgColor=0xffccccff"
     Emso_Ligure_Dyfamed_SedimentTrap:
-      defaultQuery: time%2CTSMF&time>=2009-08-05T00%3A00%3A00Z&time<=2013-05-09T00%3A00%3A00Z&TSMF_QC=1&.draw=lines&.color=0x000000&.bgColor=0xffccccff
+      defaultQuery: "time%2CTSMF&time>=2009-08-05T00%3A00%3A00Z&time<=2013-05-09T00%3A00%3A00Z&TSMF_QC=1&.draw=lines&.color=0x000000&.bgColor=0xffccccff"
     Emso_Ligure_Dyfamed_TSCTD:
-      defaultQuery: time%2Cdepth%2CTEMP&time>=2018-01-01T00%3A00%3A00Z&time<=2019-06-13T00%3A00%3A00Z&TEMP_QC=1&.draw=markers&.marker=4|3&.color=0x000000&.colorBar=|||10|15|5&.yRange=||false|&.bgColor=0xffccccff
+      defaultQuery: "time%2Cdepth%2CTEMP&time>=2018-01-01T00%3A00%3A00Z&time<=2019-06-13T00%3A00%3A00Z&TEMP_QC=1&.draw=markers&.marker=4|3&.color=0x000000&.colorBar=|||10|15|5&.yRange=||false|&.bgColor=0xffccccff"
     Emso_Ligure_Dyfamed_TSO2:
-      defaultQuery: time%2CPRES%2CDOXY&time>=2010-01-01T00%3A00%3A00Z&time<=2015-01-01T00%3A00%3A00Z&.draw=markers&.marker=4|5&.color=0x000000&.colorBar=|||||&.yRange=||false|&.bgColor=0xffccccff
+      defaultQuery: "time%2CPRES%2CDOXY&time>=2010-01-01T00%3A00%3A00Z&time<=2015-01-01T00%3A00%3A00Z&.draw=markers&.marker=4|5&.color=0x000000&.colorBar=|||||&.yRange=||false|&.bgColor=0xffccccff"
     Emso_Ligure_Dyfamed_TSOF:
-      defaultQuery: time%2CTEMP&time>=2006-05-06T10%3A13%3A22Z&time<=2007-12-15T00%3A00%3A00Z&TEMP_QC=1&.draw=lines&.color=0x000000&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP&time>=2006-05-06T10%3A13%3A22Z&time<=2007-12-15T00%3A00%3A00Z&TEMP_QC=1&.draw=lines&.color=0x000000&.bgColor=0xffccccff"
     Emso_Ligure_Dyfamed_TScurrents:
-      defaultQuery: time%2CTEMP&time>=2016-05-14T00%3A00%3A00Z&time<=2016-05-21T00%3A00%3A00Z&depth=200.0&.draw=lines&.color=0x000000&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP&time>=2016-05-14T00%3A00%3A00Z&time<=2016-05-21T00%3A00%3A00Z&depth=200.0&.draw=lines&.color=0x000000&.bgColor=0xffccccff"

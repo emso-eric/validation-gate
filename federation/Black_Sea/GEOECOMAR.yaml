@@ -1,16 +1,15 @@
 # Black_Sea - datasets federated from https://erddap.geoecomar.ro/erddap
 #
-# A datasetID with nothing after it uses the defaults: tabledap, and
-# the URL derived as <url>/<type>/<datasetID>. Add a body only to
-# override one of those or to set a defaultQuery.
-#
-# Migrated from the config/<Facility>/ layout.
+# GENERATED from the emso-erddap XML fragments by federation/.regen_from_xml.py.
+# A datasetID with nothing after it uses the defaults: tabledap, and the URL
+# derived as <url>/<type>/<datasetID>. A body appears only where the fragment
+# needed one.
 service:
   url: https://erddap.geoecomar.ro/erddap
   datasets:
     EMSO_BlackSea_EUXRoOB01_2024:
-      url: https://erddap.geoecomar.ro/erddap/tabledap/EUXRoOB01_2024
+      url: "https://erddap.geoecomar.ro/erddap/tabledap/EUXRoOB01_2024"
     EMSO_BlackSea_EUXRoOB02_2024:
-      url: https://erddap.geoecomar.ro/erddap/tabledap/EUXRoOB02_2024
+      url: "https://erddap.geoecomar.ro/erddap/tabledap/EUXRoOB02_2024"
     EMSO_BlackSea_EUXRoOB03_2024:
-      url: https://erddap.geoecomar.ro/erddap/tabledap/EUXRoOB03_2024
+      url: "https://erddap.geoecomar.ro/erddap/tabledap/EUXRoOB03_2024"

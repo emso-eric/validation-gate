@@ -1,10 +1,9 @@
 # Azores - datasets federated from https://erddap.emso-fr.org/erddap
 #
-# A datasetID with nothing after it uses the defaults: tabledap, and
-# the URL derived as <url>/<type>/<datasetID>. Add a body only to
-# override one of those or to set a defaultQuery.
-#
-# Migrated from the config/<Facility>/ layout.
+# GENERATED from the emso-erddap XML fragments by federation/.regen_from_xml.py.
+# A datasetID with nothing after it uses the defaults: tabledap, and the URL
+# derived as <url>/<type>/<datasetID>. A body appears only where the fragment
+# needed one.
 service:
   url: https://erddap.emso-fr.org/erddap
   datasets:
@@ -65,4 +64,4 @@ service:
     EMSO-AZORES_Wetlabs_Turbidity_2016-2017:
     EMSO-AZORES_Wetlabs_Turbidity_2017-2018:
     Emso_Azores_Chemini_IRON:
-      defaultQuery: time%2CTEMP&time>=2017-01-01T00%3A00%3A00Z&time<=2017-07-15T00%3A00%3A00Z&.draw=lines&.color=0x000000&.bgColor=0xffccccff
+      defaultQuery: "time%2CTEMP&time>=2017-01-01T00%3A00%3A00Z&time<=2017-07-15T00%3A00%3A00Z&.draw=lines&.color=0x000000&.bgColor=0xffccccff"
