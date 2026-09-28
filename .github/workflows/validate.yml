@@ -93,8 +93,12 @@ jobs:
       # central ERDDAP. The offending commit stays in the branch for a human to
       # revert.
       #
-      # A push ruleset is the only thing that can refuse the push itself. Where
-      # one is in place this step is redundant, which is fine.
+      # A push ruleset is the only thing that can refuse the push itself, and
+      # it is the enforcement. This step is kept anyway, as the backstop:
+      # rulesets live in GitHub's settings, where nothing in this repository
+      # can diff, test or roll them back, so one that was disabled, mis-scoped
+      # or never created for a new facility fails silently and open. This check
+      # is version-controlled, testable offline and fails closed.
       - name: Enforce access rules
         if: github.event_name == 'push'
         env:
