@@ -86,6 +86,38 @@ jobs:
           git merge --ff-only --quiet "$GITHUB_SHA"
           echo "deployment now at $(git rev-parse --short HEAD)"
 
+      # Who pushed decides which paths they were allowed to touch. This runs
+      # after the push has landed - GitHub Actions cannot reject a push - so it
+      # is not a permission, it is a brake: the job fails here and `gate.py
+      # run` below never executes, so an unauthorised edit never reaches the
+      # central ERDDAP. The offending commit stays in the branch for a human to
+      # revert.
+      #
+      # A push ruleset is the only thing that can refuse the push itself. Where
+      # one is in place this step is redundant, which is fine.
+      - name: Enforce access rules
+        if: github.event_name == 'push'
+        env:
+          # The account that pushed, not the commit author: a commit can claim
+          # any author it likes, but the push is authenticated.
+          PUSHER: ${{ github.actor }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # On a force push or a freshly created branch, event.before is either
+          # the all-zero sha or an object that is no longer reachable. Fall back
+          # to the pushed commit's own diff rather than silently checking
+          # nothing.
+          if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..$GITHUB_SHA"
+          else
+            echo "::warning::$BEFORE is not available; checking only $GITHUB_SHA"
+            range="$GITHUB_SHA^..$GITHUB_SHA"
+          fi
+          git diff --name-only "$range" > /tmp/changed.txt
+          echo "changed paths in $range:"
+          venv/bin/python .github/access/manage_access.py check \
+            --author "$PUSHER" --changed-files /tmp/changed.txt
+
       # Offline, seconds: YAML syntax, unknown keys, illegal datasetIDs,
       # duplicates across the whole federation. The gate builds the federation
       # all-or-nothing, so one malformed file means no datasets.xml is written

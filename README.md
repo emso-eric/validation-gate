@@ -27,13 +27,15 @@ cache/.emso           the compliance engine's specifications and vocabularies
 3. **Score.** Hand each dataset to `emso-metadata-harmonizer` - the same package
    the facilities run locally for shift-left pre-validation - and read its JSON
    report. The specifications and vocabularies are downloaded once up front, so
-   the compliance pass itself runs in a thread pool (`workers`, default 10),
+   the compliance pass itself runs in a thread pool (`workers`, currently 20),
    interleaved across servers so one regional ERDDAP is not hammered.
 4. **Judge.** `required >= threshold`, plus the operational and keyword tests
    when they are enforced. Every rule is evaluated even after one has failed: a
    data manager needs all the reasons at once.
 5. **Record.** One immutable row per `(run, dataset)`, carrying the policy that
-   was in force and the engine's full JSON report.
+   was in force and the engine's full JSON report. The run row records both
+   what this run checked *and* a snapshot of the whole federation, because an
+   incremental run's own tally says nothing about the 200 datasets it skipped.
 6. **Deploy.** Rebuild `datasets.xml` from what the *database* says is healthy -
    not from this run, so an incremental run cannot drop the datasets it never
    looked at - and touch a flag file for the datasets that are new to the file,
@@ -65,23 +67,29 @@ answers it. **A dataset whose latest verdict is not `healthy` is dropped from
 ## Quick start
 
 ```bash
-./setup.sh          # .env files, bind-mount files, database, schema, services
+./gate.py autodeploy    # the four .env files, random secrets, bind-mount dirs
 ```
 
-`setup.sh` is idempotent and never overwrites an existing `.env` or any service
-data. What it does by hand:
+`autodeploy` is idempotent and never overwrites an existing `.env` or any
+service data: it copies each missing `.env` from its template, generates
+`POSTGRES_PASSWORD`, `GF_SECURITY_ADMIN_PASSWORD` and `ERDDAP_flagKeyKey` into
+the root `.env` (mode 600), writes `UID`/`GID` from the invoking user, creates
+every directory `docker-compose.yaml` bind-mounts, and writes a valid empty
+`erddap/datasets.xml`. Those last two matter: Docker creates a missing
+bind-mount source itself, as root and always as a *directory*, which is the
+most common first-run failure.
+
+Then edit `.env` for this host - at minimum `ERDDAP_baseUrl` - and:
 
 ```bash
-cp .env.template .env                        # then fill in POSTGRES_PASSWORD
-cp database/.env.template database/.env      # the values must match
-cp erddap/.env.template erddap/.env          # at minimum, set ERDDAP_baseUrl
-cp grafana/.env.template grafana/.env        # then fill in the admin password
-
-docker compose up -d database erddap grafana
-docker compose run --rm gate init-db
-docker compose run --rm gate check          # validate the registry, offline
-docker compose run --rm gate run all        # first full validation
+docker compose up -d
+./gate.py init-db
+./gate.py check          # validate the registry, offline
+./gate.py run all        # first full validation
 ```
+
+The same steps work without a host Python environment:
+`docker compose run --rm gate <subcommand>`.
 
 - ERDDAP: <http://localhost:8080/erddap>
 - Grafana: <http://localhost:3000>, folder *EMSO*
@@ -93,24 +101,33 @@ cache is a few seconds per run, every run.
 ## The command line
 
 `./gate.py` runs on the host once `pip install -r requirements.txt` succeeds.
-`./gate.sh` is the optional Docker wrapper for hosts without the engine's
-compiled netCDF/UDUNITS libraries; it forwards every argument unchanged.
+On a host without the engine's compiled netCDF/UDUNITS libraries, use
+`docker compose run --rm gate <subcommand>` instead; the arguments are the same.
 
 ```bash
 ./gate.py run new         # never validated before (the CI default)
 ./gate.py run pending     # everything not currently healthy, new ones too
-./gate.py run all         # the whole federation (nightly sweep, forced rebuild)
+./gate.py run all         # the whole federation (forced rebuild)
 
 ./gate.py check           # validate and print the registry. No database.
 ./gate.py summary         # per-facility counts by status
 ./gate.py status          # summary, attention, regressions, recent runs
+./gate.py list blocked    # datasets in one status bucket, grouped by facility
 ./gate.py init-db         # apply database/sql/*.sql and exit
+
+./gate.py autodeploy      # configure a fresh checkout: .env files + secrets
+./gate.py password-rotate # new secrets in .env, applied to the live services
 ```
 
 `run` also takes `--trigger manual|push|schedule`, recorded against the run for
-the audit trail. Global flags work before or after the subcommand: `--repo`,
-`--config`, `-l/--log-level debug|info|warning|error`, `--log-dir` (`''`
-disables the rotating `logs/gate.log`).
+the audit trail. `list` takes a status (`healthy`, `blocked`, `unreachable`,
+`unhandled`, `all`), `--rf FACILITY` to restrict it to one regional facility and
+`--out FILE` to also write CSV. `autodeploy` and `password-rotate` take `--yes`
+to skip the confirmation, and refuse to run unconfirmed on a non-tty.
+
+Global flags work before or after the subcommand: `--repo`, `--config`,
+`-l/--log-level debug|info|warning|error`, `--log-dir` (`''` disables the
+rotating `logs/gate.log`).
 
 Exit codes, because CI reads them:
 
@@ -118,13 +135,16 @@ Exit codes, because CI reads them:
 | --- | --- |
 | 0 | everything checked passed |
 | 1 | the run completed and something failed validation |
-| 2 | the gate itself could not run |
+| 2 | the gate itself could not run, or another instance already holds the lock |
+
+Only one gate run at a time, enforced by a PostgreSQL session-level advisory
+lock (`0x454D534F`). A second instance exits 2 without touching anything, and
+the lock is released by the connection closing, so a hard crash leaves nothing
+stale behind. Each run also marks any `running` row left by a killed process as
+`failed`, so `v_runs` has no ghosts.
 
 Logs go to stderr, the rich tables to stdout - which is also what lets the gate
 swallow the engine's own printing without silencing its own progress.
-
-Tab completion: `./gate.sh completion install` (appends a `source` line to
-`~/.bashrc`), or source `gate-completion.bash` directly.
 
 ## The policy
 
@@ -136,17 +156,23 @@ config:
   operational_required: true   # the data is actually usable
   keywords_required: true      # keywords resolve in a controlled vocabulary
   specs_version: "v1.0.7"      # pinned on purpose
-  workers: 10
+  workers: 20
   reload_method: hardflag      # hardflag | flag | none
   reload_minutes: 60
   keep_backups: 10
 ```
 
 Paths (`federation_dir`, `datasets_xml`, `erddap_data_dir`, `templates_dir`,
-`cache_dir`) and `database_url` are also set there; see the file's own comments.
-`$GATE_DATABASE_URL` overrides `database_url`, which is how the container and CI
-pass credentials. An unknown key is a hard error - a silently ignored option is
-a policy nobody is enforcing.
+`cache_dir`) are also set there; see the file's own comments. An unknown key is
+a hard error - a silently ignored option is a policy nobody is enforcing.
+
+**No credential is configurable here**, because this file is committed. The
+connection string is built from `POSTGRES_USER`, `POSTGRES_PASSWORD`,
+`POSTGRES_HOST`, `POSTGRES_PORT` and `POSTGRES_DB` in the repository-root
+`.env` - the same file `docker-compose.yaml` reads - and `$GATE_DATABASE_URL`
+overrides the whole thing, which is how the container and CI pass credentials.
+A leftover `database_url:` or `database_env_file:` key is rejected by name
+rather than ignored.
 
 The optional-attribute percentage is recorded and reported, never gated on.
 
@@ -158,57 +184,77 @@ data moved. Bumping it is a deliberate commit, and worth following with
 
 | when | what |
 | --- | --- |
-| pull request to `production` | `validate.yml`'s offline registry check, plus `access-guard.yml`. A PR never deploys. |
-| push to `production` | `validate.yml`: the registry check on a hosted runner, then `run new` on the self-hosted runner |
-| `workflow_dispatch` | the same, with `mode` = `new`, `pending` or `all` |
-| nightly 02:17 | `run pending`, from `.github/workflows/nightly.crontab` on the host |
-| Sunday 03:17 | `run all`, same crontab |
+| push to `main` | `validate.yml`: access check, offline registry check, then `run new` |
+| `workflow_dispatch` | the same job without the access check, and `run pending` |
 
-The registry check is deliberately split out: it installs only `PyYAML` and
-`rich`, needs no database and no compliance engine, and catches what most bad
-commits actually are - malformed YAML, an illegal datasetID, a duplicate.
+Both run as a single job on the self-hosted runner, labelled
+`[self-hosted, validation-gate]`, inside the deployment at `$GATE_DEPLOYMENT`
+(default `/opt/gate`, overridable with a repository variable). There is no
+`actions/checkout`: the first step fast-forwards the deployment itself with
+`git merge --ff-only`, so the gate writes `datasets.xml` where the central
+ERDDAP reads it and keeps the ~115 MB compliance cache warm between runs. A
+deployment that has diverged fails loudly rather than discarding local commits,
+and only `main` is deployable.
 
-The nightly sweep is a crontab rather than a GitHub `schedule:` on purpose:
-scheduled workflows only fire when the self-hosted runner is online and GitHub
-delays them under load, which is the wrong reliability for a job whose purpose
-is noticing what changed while nobody was looking. Install it by appending to
-the existing crontab, never by replacing it - the file's header has the
-commands.
+`workflow_dispatch` is `run pending` rather than `run new` on purpose: it is the
+button a facility presses after fixing its metadata, when nothing in the
+registry has changed and `new` would therefore find nothing. It already requires
+write permission on the repository, so every facility that can push its own
+config can also press it, and nobody else can.
 
-`run pending` on the sweep means a facility that fixed its metadata overnight
-gets a new verdict without touching the registry, and a healthy federation costs
-nothing.
+The offline `gate.py check` runs before `gate.py run`: the gate builds the
+federation all-or-nothing, so one malformed file means no `datasets.xml` is
+written at all. Failing early leaves the live federation serving the previous
+file instead of one facility's bad push taking every facility down.
+
+There is no scheduled sweep. `run pending` from a host crontab was considered
+and is not installed; add it deliberately if a nightly re-check is wanted.
 
 ## Who may change what
 
-GitHub has no per-folder write permission, so `.github/access/access.yaml`
-compiles into the two mechanisms that do exist:
+GitHub has no per-folder write permission, so `.github/access/access.yaml` is
+the single source that compiles into the mechanisms that do exist:
 
 ```bash
+python3 .github/access/manage_access.py show         # the effective map
 python3 .github/access/manage_access.py codeowners   # -> .github/CODEOWNERS
 python3 .github/access/manage_access.py check --author X --changed-files F
-python3 .github/access/manage_access.py show         # the effective map
 python3 .github/access/manage_access.py sync --repository owner/name
 ```
 
-CODEOWNERS requests a review from the owning group; the `access-guard` workflow
-fails any pull request whose author does not own a changed path. Require both as
-status checks on `production` and a data manager can edit their own facility and
-nothing else.
+**The `Enforce access rules` step in `validate.yml`** runs `check` against
+`github.actor` - the pusher, not the commit author, since a commit can claim any
+author but the push is authenticated - for every path in
+`github.event.before..github.sha`. If any path is not owned, the job fails and
+`gate.py run` never executes, so an unauthorised edit never reaches the central
+ERDDAP. This is a brake, not a lock: the commit is already in the branch.
+
+**A push ruleset** is the only thing that refuses the push itself. It needs a
+private or internal repository, and it scales to all thirteen facilities as one
+ruleset per facility - restricting that facility's folder, bypassed by that
+facility's team - plus a base ruleset restricting everything outside
+`federation/`. See [`.github/access/README.md`](.github/access/README.md).
+
+`CODEOWNERS` and `access-guard.yml` are the pull-request path, and are dormant
+while everything goes in by push. Run `codeowners` after every edit to
+`access.yaml` and commit the result.
 
 `sync` pushes the collaborator list (repository-wide `push`, or `admin` for a
-group owning `"*"`). Run it by hand, never from CI - a workflow that can grant
-access is a workflow a commit can use to grant itself access. It never removes a
-collaborator; stale ones are reported.
+group owning `"*"`) and needs `$GITHUB_TOKEN` with `repo` scope. Run it by hand,
+never from CI - a workflow that can grant access is a workflow a commit can use
+to grant itself access. It never removes a collaborator; stale ones are
+reported.
 
-`access.yaml` holds real names and is gitignored - commit
-`access.yaml.template`.
+`access.yaml` is committed, because CI cannot read a file that is not. It holds
+GitHub usernames only - no email addresses. Usernames are already visible to
+anyone who can read the history; an email address would not be.
 
 ## Documentation
 
 - [`overview.md`](overview.md) - every component in rebuild-level detail
 - [`federation/README.md`](federation/README.md) - declaring a dataset
 - [`database/README.md`](database/README.md) - schema and views
+- [`.github/access/README.md`](.github/access/README.md) - per-folder write access
 - [`validation-gate.yaml`](validation-gate.yaml) - the policy, commented
 
 ## Operational notes
@@ -238,15 +284,23 @@ collaborator; stale ones are reported.
   removed when the run ends. `report_json` is the bulk of the database and the
   first thing to prune if it grows uncomfortable - at the cost of being able to
   replay a policy change against past runs.
-- **Idempotency.** A nightly run over a healthy federation writes a run row,
+- **Idempotency.** A run over an already-healthy federation writes a run row,
   rewrites an identical `datasets.xml` and flags nothing.
 - **Concurrency.** One gate run at a time; two would race on `datasets.xml` and
-  the loser would deploy a stale file. The workflow enforces this with a
-  concurrency group, the crontab by running its two jobs an hour apart.
+  the loser would deploy a stale file. The gate holds a PostgreSQL advisory
+  lock, which is what serialises it against anything else on the host; the
+  workflow also uses a concurrency group so runs that would exit 2 on arrival
+  are simply not queued.
 - **The container runs as the invoking user** (`user: "${UID:-1000}:${GID:-1000}"`).
   Everything the gate writes lands in the bind-mounted working tree, and a
   root-owned artefact there is what stops `./gate.py` working on the host
-  afterwards. Export `UID`/`GID`, or set them in `.env`, if the defaults are not
-  yours.
-- **`gateOLD/`** is the previous implementation, kept for reference. Nothing
-  imports it and nothing runs it.
+  afterwards. `./gate.py autodeploy` writes the real values into `.env`; export
+  `UID`/`GID` or set them by hand if that file predates it.
+- **Rotating secrets.** `./gate.py password-rotate` generates new values for
+  `POSTGRES_PASSWORD`, `GF_SECURITY_ADMIN_PASSWORD` and `ERDDAP_flagKeyKey`,
+  backs up the old `.env` alongside it, `ALTER ROLE`s the database and resets
+  the Grafana admin password with `grafana-cli`. The PostgreSQL change happens
+  *first*: if it fails, `.env` is untouched and the deployment is still
+  consistent. `ERDDAP_flagKeyKey` applies on the next
+  `docker compose up -d erddap`. The `.env.bckp.*` files it leaves behind hold
+  the previous passwords and are exactly as secret as `.env` itself.

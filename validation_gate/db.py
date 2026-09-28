@@ -35,8 +35,10 @@ class GateDatabase:
     def __init__(self, url: str, repo_root: str = ".") -> None:
         if not url:
             raise DatabaseError(
-                "no database configured: point database_env_file in "
-                "validation-gate.yaml at a .env file, or set $GATE_DATABASE_URL"
+                "no database configured: set POSTGRES_USER, POSTGRES_PASSWORD, "
+                "POSTGRES_HOST, POSTGRES_PORT and POSTGRES_DB in the "
+                "repository-root .env (`./gate.py autodeploy` writes it), or "
+                "set $GATE_DATABASE_URL"
             )
         self.url = url
         self.repo_root = os.path.abspath(repo_root)
@@ -243,12 +245,6 @@ class GateDatabase:
             cur.execute("SELECT * FROM v_facility_summary;")
             return [dict(r) for r in cur.fetchall()]
 
-    def federation_summary(self) -> dict:
-        with self._cursor() as cur:
-            cur.execute("SELECT * FROM v_federation_summary;")
-            row = cur.fetchone()
-            return dict(row) if row else {}
-
     def attention(self, limit: int = 50) -> list[dict]:
         with self._cursor() as cur:
             cur.execute("SELECT * FROM v_attention LIMIT %s;", (limit,))
@@ -287,6 +283,20 @@ class GateDatabase:
 
     def finish_run(self, run_id: int, outcome: str, counts: dict,
                    federated: int, error_message: str | None = None) -> None:
+        """
+        Close the run row: what it checked, and what the federation now is.
+
+        The two are different numbers and both are recorded. `counts` is this
+        run's own tally, which for an incremental run covers a handful of
+        datasets; the federation_* columns are counted from v_dataset_current,
+        so they describe every declared dataset whether this run looked at it
+        or not.
+
+        Storing only the former is what made the Grafana timeline swing
+        between 0 and 140 according to the run mode. The snapshot is taken in
+        the same UPDATE as the outcome, so a run can never carry counts from a
+        moment other than the one it finished at.
+        """
         with self._cursor() as cur:
             cur.execute(
                 """
@@ -299,8 +309,23 @@ class GateDatabase:
                     datasets_unreachable = %s,
                     datasets_unhandled   = %s,
                     datasets_federated   = %s,
-                    error_message        = %s
-                WHERE id = %s;
+                    error_message        = %s,
+
+                    federation_healthy     = fs.healthy,
+                    federation_blocked     = fs.blocked,
+                    federation_unreachable = fs.unreachable,
+                    federation_unhandled   = fs.unhandled,
+                    federation_pending     = fs.pending
+                FROM (
+                    SELECT
+                        COUNT(*) FILTER (WHERE status = 'healthy')     AS healthy,
+                        COUNT(*) FILTER (WHERE status = 'blocked')     AS blocked,
+                        COUNT(*) FILTER (WHERE status = 'unreachable') AS unreachable,
+                        COUNT(*) FILTER (WHERE status = 'unhandled')   AS unhandled,
+                        COUNT(*) FILTER (WHERE status = 'pending')     AS pending
+                    FROM v_dataset_current
+                ) AS fs
+                WHERE run.id = %s;
                 """,
                 (outcome, sum(counts.values()), counts.get("healthy", 0),
                  counts.get("blocked", 0), counts.get("unreachable", 0),

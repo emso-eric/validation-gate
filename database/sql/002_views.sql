@@ -26,6 +26,58 @@ END $$;
 UPDATE run SET outcome = 'failed' WHERE outcome = 'aborted';
 -- v_runs selected r.status; drop it so CREATE OR REPLACE can use r.outcome.
 DROP VIEW IF EXISTS v_runs;
+-- v_federation_timeline changed shape when the federation_* snapshot was
+-- added; CREATE OR REPLACE cannot rename or drop a column.
+DROP VIEW IF EXISTS v_federation_timeline;
+
+-- ---------------------------------------------------------------------------
+-- Backfill the federation_* snapshot for runs that finished before those
+-- columns existed.
+--
+-- Reconstructible from the validation table alone: the state of a dataset at
+-- time T is its newest validation at or before T, which is the same rule
+-- v_dataset_current applies at now(). Datasets already dropped from the
+-- registry by then are excluded, so an old point counts the federation as it
+-- stood, not as it stands today.
+--
+-- 'pending' cannot be derived that way - a dataset never validated has no row
+-- to find - so it comes from datasets_declared, which has always been the
+-- federation-wide declared count.
+--
+-- Idempotent twice over: WHERE federation_healthy IS NULL, and finished runs
+-- never change afterwards.
+-- ---------------------------------------------------------------------------
+UPDATE run r
+SET federation_healthy     = s.healthy,
+    federation_blocked     = s.blocked,
+    federation_unreachable = s.unreachable,
+    federation_unhandled   = s.unhandled,
+    federation_pending     = GREATEST(
+        r.datasets_declared - (s.healthy + s.blocked + s.unreachable + s.unhandled),
+        0
+    )
+FROM (
+    SELECT
+        r2.id,
+        COUNT(*) FILTER (WHERE latest.status = 'healthy')     AS healthy,
+        COUNT(*) FILTER (WHERE latest.status = 'blocked')     AS blocked,
+        COUNT(*) FILTER (WHERE latest.status = 'unreachable') AS unreachable,
+        COUNT(*) FILTER (WHERE latest.status = 'unhandled')   AS unhandled
+    FROM run r2
+    LEFT JOIN LATERAL (
+        SELECT DISTINCT ON (v.dataset_pk) v.dataset_pk, v.status
+        FROM validation v
+        JOIN dataset d ON d.id = v.dataset_pk
+        WHERE v.checked_at <= COALESCE(r2.finished_at, r2.started_at)
+          AND (d.removed_at IS NULL
+               OR d.removed_at > COALESCE(r2.finished_at, r2.started_at))
+        ORDER BY v.dataset_pk, v.checked_at DESC
+    ) AS latest ON TRUE
+    WHERE r2.outcome <> 'running'
+    GROUP BY r2.id
+) AS s
+WHERE r.id = s.id
+  AND r.federation_healthy IS NULL;
 
 -- The current state of every declared dataset: its most recent validation.
 CREATE OR REPLACE VIEW v_dataset_current AS
@@ -156,6 +208,12 @@ SELECT
     r.datasets_unreachable,
     r.datasets_unhandled,
     r.datasets_federated,
+    -- The whole federation as this run left it, not just what it checked.
+    r.federation_healthy,
+    r.federation_blocked,
+    r.federation_unreachable,
+    r.federation_unhandled,
+    r.federation_pending,
     r.error_message
 FROM run r
 ORDER BY r.started_at DESC;
@@ -186,18 +244,41 @@ JOIN run      r ON r.id = v.run_id
 ORDER BY v.checked_at;
 
 
--- Declared vs federated over time. Derived from the run counters, so every
--- run contributes a point and a flat federation is a flat line rather than a
--- gap in the data.
+-- The federation over time. Every finished run contributes a point, so a flat
+-- federation is a flat line rather than a gap in the data.
+--
+-- The unprefixed columns are the state of the WHOLE federation at that moment,
+-- not the run's own tally. Plotting the run's tally is what made this chart
+-- swing between 0 and 140 depending on whether the run was `new` or `all`; the
+-- run's tally is still here, under checked_*, because "what did run 37 do" is
+-- a different and also useful question.
+--
+-- healthy + blocked + unreachable + unhandled + pending = declared, for any
+-- run where the snapshot exists. Runs from before the snapshot that could not
+-- be reconstructed report NULL, which Grafana leaves as a gap - correct, since
+-- the alternative is drawing a zero that was never true.
 CREATE OR REPLACE VIEW v_federation_timeline AS
 SELECT
     r.started_at AS time,
-    r.datasets_declared,
-    r.datasets_federated,
-    r.datasets_healthy,
-    r.datasets_blocked,
-    r.datasets_unreachable,
-    r.datasets_unhandled,
+    r.datasets_declared        AS declared,
+    r.federation_healthy       AS healthy,
+    r.federation_blocked       AS blocked,
+    r.federation_unreachable   AS unreachable,
+    r.federation_unhandled     AS unhandled,
+    r.federation_pending       AS pending,
+    -- Federated is the deployed consequence of healthy: the number of dataset
+    -- blocks actually written into datasets.xml by this run. Kept separate so
+    -- a divergence between "should be federated" and "is federated" stays
+    -- visible instead of being assumed away.
+    r.datasets_federated       AS federated,
+    -- What this run itself looked at.
+    r.mode,
+    r.trigger,
+    r.datasets_checked         AS checked,
+    r.datasets_healthy         AS checked_healthy,
+    r.datasets_blocked         AS checked_blocked,
+    r.datasets_unreachable     AS checked_unreachable,
+    r.datasets_unhandled       AS checked_unhandled,
     r.specs_version,
     r.threshold
 FROM run r

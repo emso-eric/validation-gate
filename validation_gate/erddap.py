@@ -57,6 +57,7 @@ class ErddapHelper:
                 source_url=row["source_url"],
                 erddap_type=row.get("erddap_type") or "EDDTableFromErddap",
                 default_query=row.get("default_query") or "",
+                reload_minutes=self.cfg.reload_minutes,
             )
             for row in datasets
         ]
@@ -134,7 +135,7 @@ class ErddapHelper:
     # ------------------------------------------------------------------
     @staticmethod
     def _dataset_block(dataset_id: str, source_url: str, erddap_type: str,
-                       default_query: str, reload_minutes: int = 60) -> str:
+                       default_query: str, reload_minutes: int) -> str:
         """
         One <dataset> element, as ERDDAP's *FromErddap types expect it.
 

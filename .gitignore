@@ -12,10 +12,6 @@
 *.env.tmp
 .env.tmp
 
-# Personal information: real names and GitHub usernames. Commit
-# access.yaml.template instead.
-.github/access/access.yaml
-
 # ---------------------------------------------------------------------------
 # Build artefacts
 #
@@ -27,16 +23,18 @@ erddap/datasets.xml
 erddap/datasets.xml.tmp
 erddap/datasets.xml.backups/
 erddap/data/
-erddap/logo.png
-erddap/favicon.ico
 
-# The compliance engine's downloaded specifications and vocabularies (~115 MB)
-# and its temporary .nc downloads.
-gate/cache/
+# logo.png and favicon.ico are deliberately NOT ignored: they are committed and
+# bind-mounted read-only into the ERDDAP container, so a fresh checkout has
+# them and Docker never has to invent them.
 
-# Compliance reports. The authoritative copy of every one of these is in
-# PostgreSQL; the files are the convenient copy.
-gate/reports/
+# The compliance engine's downloaded specifications and vocabularies (~115 MB).
+# Keep the directory itself on persistent storage: a cold cache costs a few
+# seconds per run, every run.
+cache/
+
+# CSV dumps from `gate.py list --out`.
+*.csv
 
 # Gate run logs (rotated daily, 30-day retention)
 logs/
@@ -61,7 +59,3 @@ venv/
 .idea/
 .vscode/
 .DS_Store
-
-
-*.csv
-cache/*

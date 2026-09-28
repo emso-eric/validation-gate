@@ -148,14 +148,6 @@ class Federation:
             return [d for d in self.datasets if d.db_status in NEVER_VALIDATED]
         return [d for d in self.datasets if d.db_status != "healthy"]
 
-    def by_facility(self) -> dict[str, list[Dataset]]:
-        if not self.datasets:
-            self.build_federation()
-        grouped: dict[str, list[Dataset]] = {}
-        for dataset in self.datasets:
-            grouped.setdefault(dataset.facility, []).append(dataset)
-        return dict(sorted(grouped.items()))
-
     # ------------------------------------------------------------------
     def _registry_files(self) -> list[str]:
         found = []

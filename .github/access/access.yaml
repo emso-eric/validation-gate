@@ -7,9 +7,9 @@
 #
 # Enforcement, weakest last:
 #
-#   1. A push ruleset rejects the push outright, server-side. Strongest, but it
-#      can only express one restricted scope for the whole repository, so it
-#      covers the current two-user setup and not thirteen facilities. See
+#   1. A push ruleset rejects the push outright, server-side. Strongest, and it
+#      does scale to thirteen facilities - one ruleset per facility, restricting
+#      that facility's folder, bypassed by that facility's team. See
 #      .github/access/README.md.
 #   2. The "Enforce access rules" step in .github/workflows/validate.yml fails
 #      the run, so `gate.py run` never executes and an unauthorised change
@@ -26,11 +26,10 @@ administrators:
     - EnocMartinez
 
 Balearic_Sea:
-  # The OBSEA regional facility, and nothing else.
-  #
-  # The directory is federation/Balearic_Sea, not federation/Balearic_Sea: the
-  # federation/ layout mirrors the emso-erddap facility directories, so
-  # Balearic_Sea no longer exists.
+  # The Balearic Sea regional facility (the OBSEA observatory), and nothing
+  # else. The folder is the facility directory, not the service file: the
+  # federation/ layout mirrors the emso-erddap facility directories, and OBSEA
+  # is the ERDDAP server inside Balearic_Sea, not a facility of its own.
   folders: ["federation/Balearic_Sea"]
   users:
     - enoc-martinez-emso

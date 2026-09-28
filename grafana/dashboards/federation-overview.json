@@ -301,6 +301,10 @@
           {
             "matcher": { "id": "byName", "options": "unhandled" },
             "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "pending" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }]
           }
         ]
       },
@@ -309,7 +313,7 @@
           "refId": "A",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT time AS \"time\", datasets_declared AS declared, datasets_federated AS federated, datasets_blocked AS blocked, datasets_unreachable AS unreachable, datasets_unhandled AS unhandled FROM v_federation_timeline WHERE $__timeFilter(time) ORDER BY time;",
+          "rawSql": "SELECT time AS \"time\", declared, federated, blocked, unreachable, unhandled, pending FROM v_federation_timeline WHERE $__timeFilter(time) ORDER BY time;",
           "datasource": { "type": "postgres", "uid": "${datasource}" }
         }
       ]
@@ -582,7 +586,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT run_id, started_at, duration_s, status, mode, trigger, datasets_checked, datasets_healthy, datasets_blocked, datasets_unreachable, datasets_unhandled, datasets_federated, specs_version, harmonizer_version, threshold FROM v_runs LIMIT 50;",
+          "rawSql": "SELECT run_id, started_at, duration_s, outcome, mode, trigger, datasets_checked, datasets_healthy, datasets_blocked, datasets_unreachable, datasets_unhandled, datasets_federated, federation_blocked, federation_unreachable, specs_version, harmonizer_version, threshold FROM v_runs LIMIT 50;",
           "datasource": { "type": "postgres", "uid": "${datasource}" }
         }
       ]

@@ -80,7 +80,9 @@ CREATE TABLE IF NOT EXISTS run (
     operational_required BOOLEAN,
     keywords_required    BOOLEAN,
 
-    -- counters
+    -- What THIS run looked at. An incremental run checks a handful of
+    -- datasets, so these are small on purpose and say nothing about the
+    -- federation as a whole - see the federation_* snapshot below.
     datasets_declared    INTEGER NOT NULL DEFAULT 0,
     datasets_checked     INTEGER NOT NULL DEFAULT 0,
     datasets_healthy     INTEGER NOT NULL DEFAULT 0,
@@ -89,10 +91,35 @@ CREATE TABLE IF NOT EXISTS run (
     datasets_unhandled   INTEGER NOT NULL DEFAULT 0,
     datasets_federated   INTEGER NOT NULL DEFAULT 0,
 
+    -- The state of the WHOLE federation when this run finished, counted from
+    -- v_dataset_current rather than from what the run happened to check.
+    --
+    -- Without this a timeseries is unreadable: `run new` checks two datasets
+    -- and reports datasets_blocked = 0, `run all` checks everything and
+    -- reports 140, and the chart swings between them according to which kind
+    -- of run happened - not according to anything about the federation.
+    --
+    -- NULL means "not recorded", which is true for runs that predate these
+    -- columns and were not reconstructible. Never 0 in that case: the same
+    -- rule as required_score.
+    federation_healthy     INTEGER,
+    federation_blocked     INTEGER,
+    federation_unreachable INTEGER,
+    federation_unhandled   INTEGER,
+    federation_pending     INTEGER,
+
     error_message      TEXT
 );
 
 CREATE INDEX IF NOT EXISTS run_started_idx ON run (started_at DESC);
+
+-- CREATE TABLE IF NOT EXISTS does nothing to a table that already exists, so
+-- new columns need their own idempotent statement for existing deployments.
+ALTER TABLE run ADD COLUMN IF NOT EXISTS federation_healthy     INTEGER;
+ALTER TABLE run ADD COLUMN IF NOT EXISTS federation_blocked     INTEGER;
+ALTER TABLE run ADD COLUMN IF NOT EXISTS federation_unreachable INTEGER;
+ALTER TABLE run ADD COLUMN IF NOT EXISTS federation_unhandled   INTEGER;
+ALTER TABLE run ADD COLUMN IF NOT EXISTS federation_pending     INTEGER;
 
 
 -- --------------------------------------------------------------------------

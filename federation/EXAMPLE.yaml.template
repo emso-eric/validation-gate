@@ -11,8 +11,13 @@ service:
       # type: tabledap (default) | griddap
       type: "tabledap"
 
-      # defaultQuery: percent-encoded; becomes <defaultGraphQuery> in datasets.xml.
-      defaultQuery: "time%2CTEMP%2CTIME_QC&amp;time&gt;2015-04-15T00%3A00%3A00Z&amp;time&lt;2015-04-22T00%3A00%3A00Z&amp;DEPH=1500.0&amp;.draw=linesAndMarkers&amp;.marker=6|3&amp;.color=0x000000&amp;.colorBar=|||||&amp;.bgColor=0xffccccff"
+      # defaultQuery: becomes <defaultGraphQuery> in datasets.xml.
+      #
+      # Percent-encode the ERDDAP query itself (%2C for a comma, %3A for a
+      # colon), but write & < > literally: the gate escapes the XML
+      # metacharacters when it generates datasets.xml, so an &amp; here would
+      # be written out as &amp;amp; and the graph would not load.
+      defaultQuery: "time%2CTEMP%2CTIME_QC&time>2015-04-15T00%3A00%3A00Z&time<2015-04-22T00%3A00%3A00Z&DEPH=1500.0&.draw=linesAndMarkers&.marker=6|3&.color=0x000000&.colorBar=|||||&.bgColor=0xffccccff"
 
 
 
