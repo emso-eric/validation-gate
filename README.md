@@ -16,6 +16,68 @@ and federates the ones that pass. Nothing else.
 
 ---
 
+## New here? Start with this
+
+**EMSO** — the European Multidisciplinary Seafloor and Water Column Observatory
+— is a European Research Infrastructure Consortium (ERIC) that operates a
+pan-European network of **14 regional facilities** across the Mediterranean,
+the Black Sea, the North Atlantic and the Arctic Ocean. Each facility is run by
+an independent national institution: a cabled coastal observatory, a deep-ocean
+mooring, an open-ocean time-series station. They host physical, biogeochemical,
+acoustic and imaging sensors, often on the same platform.
+
+Those institutions keep full sovereignty over their own data. Nobody uploads
+files to a central archive, and no central authority can rewrite a facility's
+metadata. That constraint is political as much as technical, and it rules out
+the obvious architecture of one big database.
+
+**ERDDAP** is the data broker that makes the alternative work. It is a
+widely-used scientific data server that takes datasets in formats like NetCDF
+and serves them over a uniform REST API — the same query syntax and the same
+output formats (CSV, JSON, NetCDF, graphs) whatever the underlying file.
+
+**The federation** is what you get by combining those two. Every regional
+facility runs *its own* ERDDAP, holding its own data. A **central ERDDAP** then
+publishes a single catalogue of everything, using ERDDAP's `EDDTableFromErddap`
+and `EDDGridFromErddap` dataset types — thin proxies that forward each request
+to the regional node that actually holds the data. A user searches one
+catalogue and queries one API; the bytes still come from the institution that
+produced them. Nothing is copied, and nothing is centralised except the index.
+
+That leaves one question: **what gets into the index?**
+
+Federating a dataset means advertising it as EMSO data, so a dataset with
+missing units, an unresolvable sensor identifier or a free-text keyword nobody
+can look up degrades the whole catalogue. For two years compliance with the
+EMSO Metadata Specifications was voluntary. The result was a large catalogue
+with a low harmonization score — the percentage of the specification's required
+tests a dataset actually passes.
+
+**This repository is the mechanism that changed that.** It is the *validation
+gate*: a CI/CD pipeline that acts as a circuit breaker on the central ERDDAP.
+Facilities register a dataset by committing its URI here — never the data
+itself. Every commit triggers an automated compliance audit against the
+specifications, and only datasets that pass are written into the central
+ERDDAP's configuration. Everything else stays on its regional server,
+reachable, but not federated.
+
+Switching it on cut the number of federated datasets sharply and pushed the
+harmonization score close to full compliance, where it has stayed as facilities
+fixed their metadata and their datasets came back.
+
+If you want the design reasoning rather than the operating instructions, the
+framework is described in *"A DataOps Framework for Distributed
+Multidisciplinary In Situ Marine Data: The EMSO ERIC Infrastructure"*
+(Martínez et al., IEEE Journal of Oceanic Engineering). Related repositories:
+the [metadata specifications](https://github.com/emso-eric/emso-metadata-specifications)
+(the single source of truth this gate validates against), the
+[harmonizer toolbox](https://pypi.org/project/emso-metadata-harmonizer/)
+(`pip install emso-metadata-harmonizer`, which facilities run locally *before*
+publishing), and
+[example datasets](https://github.com/emso-eric/example-datasets).
+
+---
+
 ## What the gate does
 
 Your data never moves. The central node holds no copy of it: each federated

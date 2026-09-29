@@ -63,15 +63,25 @@ panel at it. Do not put the join in the dashboard.
 
 ### The timeline trap
 
-"Declared vs federated over time" reads `v_federation_timeline`, which exposes
-the **`federation_*`** columns of `run` — the state of the whole federation when
-each run finished.
+"Declared vs federated over time" selects
+`declared, federated, blocked, unreachable, unhandled, pending` from
+`v_federation_timeline`. Those aliases matter, because the view draws them from
+two different places in `run`:
 
-Do **not** switch it to the `datasets_*` columns. Those are what that run
-checked: `run new` checks two datasets and reports 0 blocked, `run all` checks
-everything and reports 140, and the chart then swings between them according to
-the run mode rather than according to anything about the federation. That bug
-is the reason both sets of columns exist. See
+| Series | Column behind it | Scope |
+|---|---|---|
+| `blocked`, `unreachable`, `unhandled`, `pending` | `federation_*` | the whole federation |
+| `declared`, `federated` | `datasets_declared`, `datasets_federated` | also the whole federation |
+
+The view also exposes `checked`, `checked_healthy` and the other per-run
+counters. **Do not put those on this panel.** They are what that run happened
+to look at: `run new` checks two datasets and reports 0 blocked, `run all`
+checks everything and reports, say, 140, and the chart then swings between them
+according to the run mode rather than according to anything about the
+federation. That bug is the reason the `federation_*` columns exist.
+
+The rule is the scope, not the prefix — `datasets_declared` and
+`datasets_federated` are federation-wide despite their names. See
 [`../database/README.md`](../database/README.md).
 
 ---

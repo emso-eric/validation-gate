@@ -102,7 +102,15 @@ Root `.env`, in full:
 | `POSTGRES_USER` / `_PASSWORD` / `_DB` | `gate` / — / `emso_gate` | read by the image *and* the gate |
 | `POSTGRES_HOST` / `_PORT` | `127.0.0.1` / `5432` | ignored by the image; tells the gate where to connect |
 | `GF_SECURITY_ADMIN_USER` / `_PASSWORD` | `admin` / — | Grafana admin |
+| `ERDDAP_baseUrl` / `ERDDAP_baseHttpsUrl` | — | the node's public addresses, as ERDDAP advertises them |
+| `ERDDAP_emailSmtpHost`, `ERDDAP_emailSmtpPort` | — | subscription and error mail |
+| `ERDDAP_emailUserName`, `ERDDAP_emailPassword` | — | SMTP credentials |
 | `ERDDAP_flagKeyKey` | — | ERDDAP's flag-URL key |
+
+The `ERDDAP_*` entries are deployment-wide, which is why they sit here and not
+in `erddap/.env` — the base URLs change per server, and `flagKeyKey` has to be
+reachable by `password-rotate`. Everything in `erddap/.env` is tuning that does
+not change between deployments.
 
 Get `UID`/`GID` wrong and every container writes files you cannot clean up
 without `sudo`. Use `id -u` and `id -g`.

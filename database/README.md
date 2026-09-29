@@ -60,27 +60,33 @@ Pinning the engine version per run is what makes a federation-wide score shift
 attributable: telling "the data changed" from "the specifications changed"
 after the fact is the hard part of any compliance incident.
 
-#### The two sets of counters — read this before touching Grafana
+#### Two scopes of counter — read this before touching Grafana
 
-```sql
-datasets_checked, datasets_healthy, datasets_blocked, ...    -- THIS run
-federation_healthy, federation_blocked, federation_pending,  -- the WHOLE federation
-```
+The column prefix does **not** tell you the scope. Three groups:
 
-They answer different questions and both are recorded.
+| Columns | Scope | Source |
+|---|---|---|
+| `datasets_checked`, `datasets_healthy`, `datasets_blocked`, `datasets_unreachable`, `datasets_unhandled` | **this run only** | the run's own `Counter` |
+| `datasets_declared`, `datasets_federated` | the whole federation | `len(all_datasets)` at `start_run`; rows written to `datasets.xml` at `_deploy` |
+| `federation_healthy`, `federation_blocked`, `federation_unreachable`, `federation_unhandled`, `federation_pending` | the whole federation | counted from `v_dataset_current` |
 
-`datasets_*` is the run's own tally. An incremental `run new` checks two
-datasets and reports `datasets_blocked = 0`. `run all` checks everything and
-reports 140. Plotting that produces a chart that swings between the two
-according to which *kind of run* happened — not according to anything about the
-federation.
+The first group is the trap. An incremental `run new` checks two datasets and
+reports `datasets_blocked = 0`; `run all` checks everything and reports, say, 140.
+Plotting those produces a chart that swings between the two according to which
+*kind of run* happened — not according to anything about the federation. That
+bug is why the `federation_*` group exists.
 
-`federation_*` is counted from `v_dataset_current` in the same `UPDATE` that
-closes the run, so it is the state of everything at the moment that run
-finished, whether the run looked at it or not. **That is the one to plot.**
+`federation_*` is counted in the same `UPDATE` that closes the run, so it is
+the state of everything at the moment that run finished, whether the run looked
+at it or not. **Those are the ones to plot for status.**
 
-`NULL` means "not recorded" — true for runs predating these columns that were
-not reconstructible. Never 0 in that case.
+`datasets_declared` and `datasets_federated` are safe to plot despite the
+prefix: both are federation-wide. `datasets_federated` is `len(current)` from
+`_deploy()`, which is built from `get_healthy_datasets()` — every healthy
+dataset, not just this run's.
+
+`NULL` in a `federation_*` column means "not recorded" — true for runs
+predating these columns that were not reconstructible. Never 0 in that case.
 
 ### `validation` — immutable history
 
