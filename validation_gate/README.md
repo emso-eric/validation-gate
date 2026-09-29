@@ -49,7 +49,41 @@ servers, and the workflow treats it accordingly.
 ## `config.py`
 
 `Config` is a dataclass loaded from `validation-gate.yaml`, which must contain
-a `config:` mapping. Two properties worth knowing:
+a `config:` mapping.
+
+### Every key
+
+| Key | Default in the file | Dataclass default | Meaning |
+|---|---|---|---|
+| `threshold` | `90.0` | `90.0` | percentage of **required** attributes a dataset must pass. The optional percentage is recorded and reported, never gated on. |
+| `operational_required` | `true` | `True` | enforce the operational tests |
+| `keywords_required` | `true` | `True` | enforce the keyword tests |
+| `specs_version` | `v1.0.7` | `v1.0.7` | pinned deliberately — with a floating version a federation-wide score shift could come from the specifications rather than the data |
+| `federation_dir` | `federation` | same | the registry root |
+| `datasets_xml` | `erddap/datasets.xml` | same | the generated file |
+| `erddap_data_dir` | `erddap/data` | same | `/erddapData`; the flag directories live under it |
+| `templates_dir` | `erddap/templates` | same | header and footer |
+| `cache_dir` | `cache/.emso` | same | **must end in `.emso`** — the engine resolves its cache by that literal name relative to its working directory. Keep it on persistent storage: a cold cache re-downloads ~50 resources. |
+| `workers` | `20` | `10` | thread-pool size for the compliance pass |
+| `reload_method` | `hardflag` | `hardflag` | `hardflag`, `flag` or `none` — see [`../erddap/README.md`](../erddap/README.md) |
+| `reload_minutes` | `60` | `60` | `<reloadEveryNMinutes>` written into each dataset block |
+| `keep_backups` | `10` | `10` | timestamped `datasets.xml` backups retained |
+
+Paths are relative to the repository root, resolved through `Config.path(name)`.
+
+The file and the dataclass disagree on `workers` — the checked-in policy raises
+it to 20. Datasets are interleaved by server, so 20 workers does not mean 20
+simultaneous requests to one regional ERDDAP.
+
+There is deliberately **no database key**. This file is committed, so it holds
+no credentials and not even a path to them; `database_url` and
+`database_env_file` are rejected by name with an error saying where credentials
+moved to.
+
+`reload_method` and `threshold` are validated after load — an unknown reload
+method or a threshold outside 0–100 is a `ConfigError`.
+
+### Two properties worth knowing
 
 **Unknown keys are an error.** `Config.load` compares the YAML keys against the
 dataclass fields and raises `ConfigError` listing anything unrecognised. A typo
@@ -118,9 +152,9 @@ lines:
   setting it once means no thread ever does.
 - **`stdout` is redirected for the whole pass, not per call.** The engine prints
   pandas frames and progress tables straight to stdout and `quiet=True` does not
-  cover all of it; on 207 datasets that is thousands of lines around the gate's
-  own output. `sys.stdout` is process-wide, so swapping it per thread would race.
-  The gate logs to **stderr**, so progress still appears.
+  cover all of it; across the whole federation that is thousands of lines around
+  the gate's own output. `sys.stdout` is process-wide, so swapping it per thread
+  would race. The gate logs to **stderr**, so progress still appears.
 
 `shuffle_datasets()` interleaves by hostname. Registry order groups every
 dataset of a server together, which points the whole pool at one regional

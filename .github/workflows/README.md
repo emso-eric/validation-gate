@@ -189,7 +189,7 @@ while every pull request went green. `workflow_dispatch` is one of the two
 documented exceptions to that rule.
 
 `mode=new` is what a human push used to do: score what this merge added, not
-all 207. `trigger=push` keeps the runs table honest — this is a push to `main`,
+the whole federation. `trigger=push` keeps the runs table honest — this is a push to `main`,
 performed by the gate rather than by a person.
 
 ### What stays manual, permanently

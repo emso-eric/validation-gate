@@ -13,7 +13,9 @@ federation/
 └── EXAMPLE.yaml.template     <- copy this for a new server
 ```
 
-Currently **207 datasets** across **16 service files** in **13 facilities**.
+`python3 gate.py check` prints the current contents — facilities, servers and
+dataset counts — and is the authority; no count is repeated here, because a
+number in prose goes stale the first time someone adds a dataset.
 
 > **For data managers.** This is the only directory you need. The gate's
 > configuration, code and workflows live elsewhere and you do not have to
