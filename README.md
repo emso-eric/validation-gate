@@ -178,6 +178,13 @@ A pull request that touches anything *other* than facility records — code,
 workflows, the access list — does not auto-merge. That is deliberate: a typo in
 the gate should not deploy itself unreviewed.
 
+One thing you may see: if another facility merged while your pull request was
+open, yours has to be brought up to date first, so that your records are checked
+against theirs and not against a stale copy. If your branch lives in this
+repository the gate does that for you and the checks simply run again. If you
+worked from a **fork** it cannot, and it will ask you to press **Update
+branch**. Neither case is a rejection.
+
 ---
 
 ## Who can edit the federation
