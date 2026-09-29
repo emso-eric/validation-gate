@@ -42,38 +42,29 @@ two manual steps: the group in `access.yaml`, and the GitHub team membership.
 
 ## Why your pull request was refused
 
-**"@you is not listed for N changed path(s)"** — the pull request touches
-something outside your folder. Often this is accidental: an editor rewriting
-line endings, a stray `.gitignore` edit, or a file moved *out* of your folder
-(which counts as a change to your folder *and* to wherever it landed).
+**"@you opened this pull request but is not listed in access.yaml for a path it
+changes"** — the pull request touches something outside your folder. Often this
+is accidental: an editor rewriting line endings, a stray `.gitignore` edit, or a
+file moved *out* of your folder (which counts as a change to your folder *and*
+to wherever it landed).
 
 Drop those paths, or ask an administrator to make the change.
 
-**"commit ... has an author email that is not linked to any GitHub account"** —
-this is the one that catches people out.
+**Your git `user.email` does not matter here.** The check reads the account that
+*opened* the pull request, which GitHub authenticated when you clicked the
+button. It does not resolve your commits' email addresses to accounts, so
+committing as `you@laptop.local` is fine and there is nothing to configure. The
+commit list in the check's log is there to be read, not to be passed.
 
-The check does not read the name on your commit; it asks GitHub which *account*
-your commit's email address belongs to. A commit made with
-`you@laptop.local`, or with an institutional address you never added to GitHub,
-resolves to no account at all. There is then no username to check against
-`access.yaml`, and the gate refuses rather than guessing.
+That is a deliberate narrowing. Commit author email is set by whoever runs `git
+commit` — `--author` accepts any address — so it could never be a permission.
+The account that opened the pull request cannot be set that way.
 
-Two fixes, either is fine:
-
-```bash
-# tell GitHub about the address you already commit with
-#   -> github.com/settings/emails, then re-run the check
-
-# or commit with an address GitHub already knows
-git config user.email "the-address-on-your-github-account"
-git commit --amend --reset-author
-git push --force-with-lease
-```
-
-**Merge commits are not judged.** Pressing "Update branch" creates a merge
-commit authored by whoever pressed it, carrying the base branch's files. Judging
-it would deny pull requests for paths their author never touched, so commits
-with two or more parents are skipped.
+**Whoever opens the pull request is answerable for all of it.** Authorization
+follows the opener, not the commits, so a pull request carrying someone else's
+work is judged against you. The practical case is GitHub's **Revert** button: it
+authors its pull request to whoever pressed it, so reverting a commit that
+touched paths you do not own will be refused. Ask an administrator to revert it.
 
 ---
 
@@ -159,15 +150,33 @@ What it does, in order:
 4. Records `data_only` — whether every path matches
    `^federation/[^/]+/[^/]+\.yaml$`. This is what gates auto-merge; see
    [`.github/workflows/README.md`](../workflows/README.md).
-5. Resolves every commit's author to a GitHub login, skipping merge commits and
-   failing closed on an unresolvable address.
-6. Requires **every author to own every changed path** — not merely their own
-   commits.
+5. Lists the pull request's commits and the account each one's author email
+   resolves to, **as log output only**. No part of this list is an
+   authorization input.
+6. Requires **`github.event.pull_request.user.login` to own every changed
+   path** — the single subject of the decision.
 
-That last point is deliberate. A facility pull request touches one folder that
-all of that facility's members own, so it costs nothing in practice, and it
-closes the case where two authors each own half a diff and neither is allowed
-the whole of it.
+Step 6 is the whole security property, and step 5 is deliberately not.
+
+`.author.login` on a commit is GitHub resolving the `author.email` field inside
+the commit object, and that field is chosen by whoever runs `git commit`:
+`--author="x <someone@else>"` sets it to anything, and this repository publishes
+the administrator's address in its own history. Judging it therefore let any
+GitHub user open a fork pull request whose commits resolved to the
+administrator, and be granted `folders: ["*"]` by the check built to prevent
+exactly that. `pull_request.user.login` is the authenticated account GitHub
+recorded as opening the pull request; nothing a branch contains can alter it.
+
+The commit list is kept as output rather than restored as a second gate because
+a spoofable identity cannot usefully restrict an authenticated one: as a hard
+failure it could only deny a pull request already authorized by its opener, and
+its "email is not linked to any GitHub account" case failed contributors for a
+condition they usually could not diagnose.
+
+The cost is that authorization follows whoever *opens* the pull request, so one
+carrying another person's commits is judged against the opener. GitHub's Revert
+button is the case that shows up in practice — it authors its pull request to
+whoever pressed it.
 
 ### The backstop: `Enforce access rules` in `validate.yml`
 

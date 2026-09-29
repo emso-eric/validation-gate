@@ -162,8 +162,8 @@ gh pr create          # or open the pull request in the web UI
 
 Nothing to chase, and nobody to email:
 
-1. **`authorize`** checks that every commit author owns every path the pull
-   request touches.
+1. **`authorize`** checks that the account that opened the pull request owns
+   every path it touches.
 2. **`registry`** checks that the registry still parses — no unknown keys, no
    illegal or duplicated datasetIDs anywhere in the federation.
 3. If both pass **and the pull request changes nothing but facility records**,
