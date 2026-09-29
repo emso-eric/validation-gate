@@ -60,6 +60,18 @@ You only need a body under a datasetID to override one of those defaults.
 The base URL of your ERDDAP. Normalised: a trailing slash is stripped and
 `/erddap` is appended when missing.
 
+It must be `http://` or `https://`, carry no `user:password@`, and name a server
+reachable on the **public internet**. The gate fetches this URL from the central
+node, so a private, loopback or link-local address — `127.0.0.1`, `10.x`,
+`192.168.x`, `169.254.x`, or a hostname resolving to one — is refused, with the
+resolved address named in the error. The same applies to a per-dataset `url`
+override.
+
+Both plain `http://` and `https://` are accepted; two federated services use
+`http://` today. If your facility genuinely serves ERDDAP on an address only the
+central node can reach internally, that is an administrator decision — see
+`ALLOWED_PRIVATE_HOSTS` in `validation_gate/federation.py`.
+
 ### `service.datasets` — required, at least one
 
 A mapping of datasetID to either nothing or an override body. A datasetID must
@@ -150,6 +162,9 @@ name, rather than guessed at.
 | `has unknown key(s)` | a typo such as `defaultquery` or `protocol` |
 | `has type 'x'; expected tabledap, griddap` | unsupported protocol |
 | `must be empty or a mapping` | a scalar under a datasetID, e.g. `MY_ID: tabledap` |
+| `must start with http:// or https://` | a missing scheme, or one that is not HTTP |
+| `must not carry credentials` | a `user:password@` in the URL |
+| `is not a public address` | the URL names a private, loopback or link-local address |
 
 Note the last one: `MY_ID: tabledap` is **not** how you set the protocol.
 Use `MY_ID:` followed by an indented `type: griddap`.
