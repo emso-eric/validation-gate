@@ -201,11 +201,15 @@ since a tool that grants access is a tool a commit could use to grant itself
 access. Ask an administrator to add your GitHub username to your facility's
 group.
 
-**One thing that catches people out:** the check identifies you by the GitHub
-account your *commit email* resolves to. If you commit with an address that is
-not registered on your GitHub account, the commit belongs to no username, and
-`authorize` refuses it rather than guessing. Add the address to your GitHub
-account, or re-commit with one your account already has.
+**The check identifies you by the account that opened the pull request**, which
+GitHub authenticated when you clicked the button. Your git `user.email` does not
+come into it, so committing as `you@laptop.local` is fine and there is nothing
+to configure.
+
+The flip side is that whoever *opens* a pull request answers for every path in
+it. A pull request carrying someone else's commits is judged against you, not
+them — including the one GitHub's **Revert** button creates, which it authors to
+whoever pressed it.
 
 Full detail in [`.github/access/README.md`](.github/access/README.md).
 
