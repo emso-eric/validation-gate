@@ -1,124 +1,225 @@
-# Validation Gate Database
+# The gate database
 
-PostgreSQL: the federation's memory. `sql/` is applied in filename order by
-`./gate.py init-db`, and every statement is idempotent
-(`CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE VIEW`), so re-running it
-against a live database is safe. Every SQL statement the gate runs lives in
-`validation_gate/db.py`; the connection is `autocommit`.
+> **For maintainers.** Data managers never touch this.
+
+PostgreSQL 17. The schema is two files, applied in order and idempotent, so
+`init_db()` runs them on every connection:
+
+| File | Contents |
+|---|---|
+| [`sql/001_schema.sql`](sql/001_schema.sql) | five tables and their indexes |
+| [`sql/002_views.sql`](sql/002_views.sql) | inline migrations, then nine views |
+
+Everything that reads the database — `gate.py`, Grafana, you with `psql` —
+goes through a **view**. Dashboards hold panel layout, not schema knowledge, so
+a column can move without editing JSON.
+
+---
+
+## The central design decision
+
+**There is no current-state table.** The current state of a dataset is its most
+recent `validation` row, exposed as `v_dataset_current`.
+
+Everything follows from that:
+
+- The gate **only ever inserts**. Nothing in `validation` is updated after the
+  run that wrote it, so there is no state to keep in sync and no write path that
+  can corrupt history.
+- **`degraded` does not exist as a status.** "Was healthy, now is not" is a
+  question about history, and history is what the `validation` table already is.
+  It is derived instead, as `v_regressions`.
+- A dataset is **federated when its latest status is `healthy`**. Nothing else.
+
+---
+
+## Tables
 
 ```
-sql/001_schema.sql   tables
-sql/002_views.sql    everything Grafana and the CLI read
+facility ──< service ──< dataset ──< validation >── run
 ```
 
-## What is recorded, and why the separation matters
+### `facility` / `service` / `dataset` — what git declares
 
-| table | contents |
-| --- | --- |
-| `facility` | `slug` (the `federation/` directory name), `first_seen`, `last_seen` |
-| `service` | one ERDDAP server: `facility_id`, `name` (the file stem), `url`, `registry_path`; unique per `(facility, name)` |
-| `dataset` | `dataset_id` **globally unique**, `source_url`, `protocol`, `erddap_type`, `default_query`, `registry_path`, `removed_at` |
-| `run` | one execution: `mode`, `trigger`, the engine and specifications version that scored it, the policy it enforced, `outcome` (`running` \| `success` \| `failed`), and two sets of counters - see below |
-| `validation` | one `(run, dataset)` verdict, unique on that pair. Immutable - nothing here is updated after the run that wrote it |
+Mirrored from `federation/` by `sync_federation()` on every run. `facility.slug`
+is the directory name; `service.name` is the registry file stem;
+`dataset.dataset_id` is `UNIQUE` because ERDDAP keys the whole federation on it.
 
-### The two sets of counters on `run`
+`first_seen` / `last_seen` are maintained on every sync. **`dataset.removed_at`
+is set when a dataset disappears from the registry — the row is never deleted**,
+because its validation history is the answer to "why was this dropped?".
+`v_dataset_current` filters on `removed_at IS NULL`.
 
-`run` answers two different questions, and conflating them produces a chart
-that measures the schedule rather than the federation.
+### `run` — one execution of the gate
 
-| columns | question |
-| --- | --- |
-| `datasets_checked`, `datasets_healthy`, `datasets_blocked`, `datasets_unreachable`, `datasets_unhandled` | **What did this run do?** Only the datasets it actually looked at. A `run new` that finds nothing new checks zero datasets and every one of these is 0. |
-| `federation_healthy`, `federation_blocked`, `federation_unreachable`, `federation_unhandled`, `federation_pending` | **What is the federation now?** Every declared dataset, counted from `v_dataset_current` when the run finished, whether this run looked at it or not. |
+Records the mode, the trigger, **the engine that produced every score**
+(`harmonizer_version`, `specs_version`) and **the policy it enforced**
+(`threshold`, `operational_required`, `keywords_required`).
 
-Plot the second set. The first set made `blocked` swing between 0 and 140
-according to whether the run was `new` or `all` - a real signal about the CI
-schedule and a completely false one about compliance.
+Pinning the engine version per run is what makes a federation-wide score shift
+attributable: telling "the data changed" from "the specifications changed"
+after the fact is the hard part of any compliance incident.
 
-`datasets_declared` and `datasets_federated` are already federation-wide, so
-they have no second version. The snapshot satisfies
-`healthy + blocked + unreachable + unhandled + pending = datasets_declared`.
+#### The two sets of counters — read this before touching Grafana
 
-A `NULL` in the `federation_*` columns means "not recorded" - a run from before
-these columns existed that could not be reconstructed. Never 0: the same rule
-as `required_score`, and Grafana draws a gap rather than a cliff.
+```sql
+datasets_checked, datasets_healthy, datasets_blocked, ...    -- THIS run
+federation_healthy, federation_blocked, federation_pending,  -- the WHOLE federation
+```
 
-Runs that predate the columns are back-filled once, from the `validation`
-table, by `sql/002_views.sql`: the state of a dataset at time *T* is its newest
-validation at or before *T*, which is exactly the rule `v_dataset_current`
-applies at `now()`. Datasets already dropped from the registry by then are
-excluded, so an old point counts the federation as it stood rather than as it
-stands today. The backfill is idempotent and skips rows that already have a
-snapshot.
+They answer different questions and both are recorded.
 
-### Three rules run through the whole schema
+`datasets_*` is the run's own tally. An incremental `run new` checks two
+datasets and reports `datasets_blocked = 0`. `run all` checks everything and
+reports 140. Plotting that produces a chart that swings between the two
+according to which *kind of run* happened — not according to anything about the
+federation.
 
-**There is no current-state table.** The current state of a dataset is simply
-its newest `validation` row, exposed as `v_dataset_current`. Nothing can drift
-out of sync with it, and `degraded` does not need to exist as a status: "was
-healthy, now is not" is a question about history, and the table *is* the
-history - `v_regressions` answers it.
+`federation_*` is counted from `v_dataset_current` in the same `UPDATE` that
+closes the run, so it is the state of everything at the moment that run
+finished, whether the run looked at it or not. **That is the one to plot.**
 
-**`NULL` is not zero.** A dataset the engine never scored stores
-`required_score = NULL`. A regional outage must not show up as a compliance
-collapse, and "could not be evaluated" must stay distinguishable from
-"evaluated and scored badly" - only the second is the facility's to fix.
+`NULL` means "not recorded" — true for runs predating these columns that were
+not reconstructible. Never 0 in that case.
 
-**Every verdict carries its own policy.** `validation` stores the threshold and
-the two required-test flags in force when it was written; `run` stores the
-engine and specifications version. Raising the bar later does not rewrite the
-history of why past datasets were admitted, and a federation-wide score shift
-can be attributed to the specifications rather than to the data.
+### `validation` — immutable history
 
-Datasets that leave the registry are marked `removed_at`, never deleted: their
-validation history is the answer to "why was this dropped?". Re-declaring one
-clears `removed_at` and its history comes back with it.
+One row per `(run_id, dataset_pk)`, `UNIQUE` on the pair. Three rules run
+through the whole table:
+
+**1. `NULL` is not zero.** `required_score` is `NULL` when the engine never
+scored the dataset. "Could not be evaluated" and "evaluated badly" are different
+outcomes and only the second is the facility's to fix. A 0 would drag every
+average down and make an unreachable server look like bad metadata.
+
+**2. The policy is stored per verdict.** `threshold`, `operational_required`
+and `keywords_required` are copied onto every row. Raising the bar later does
+not rewrite the history of why past datasets were admitted.
+
+**3. The engine's full JSON is kept** in `report_json` (`JSONB`), so a future
+policy change can be replayed against past runs without re-validating the
+federation:
+
+```sql
+SELECT dataset_id, report_json -> 'metadata' -> 'required'
+FROM validation v JOIN dataset d ON d.id = v.dataset_pk
+WHERE v.run_id = 42;
+```
+
+`institution` and `emso_facility` are read from the dataset's own metadata and
+drive `v_facility_mismatch`.
+
+A `CHECK` constraint restricts `status` to the four known values, so a typo in
+new code fails the insert rather than creating a fifth state nothing reports on.
+
+---
 
 ## Views
 
-Grafana and the CLI read views, never tables. Dashboards then hold panel
-configuration rather than business logic.
+| View | Answers |
+|---|---|
+| `v_dataset_current` | the current state of every declared dataset — **the base of everything else** |
+| `v_facility_summary` | per-facility counts by status + mean required score |
+| `v_federation_summary` | one row of federation-wide totals, for stat tiles |
+| `v_attention` | everything not healthy, worst first, with how far short |
+| `v_regressions` | healthy at some point in the past, not healthy now |
+| `v_facility_mismatch` | the dataset's self-declared facility disagrees with its directory |
+| `v_runs` | run history with duration |
+| `v_score_history` | every score a dataset has ever had, for drill-down |
+| `v_federation_timeline` | the federation over time, one point per finished run |
 
-| view | for |
-| --- | --- |
-| `v_dataset_current` | The spine: `DISTINCT ON (dataset)` latest validation of every dataset still declared. `status` falls back to `'pending'`, `federated = (status = 'healthy')`. |
-| `v_facility_summary` | Per-facility counts by status, mean required score, oldest check. |
-| `v_federation_summary` | The same federation-wide, one row, for stat tiles. |
-| `v_attention` | Everything not healthy, worst first, with `points_short`. Never-scored datasets sort **last**: they need an ERDDAP fixed, not metadata. |
-| `v_facility_mismatch` | Datasets whose self-declared `emso_facility` disagrees with the directory they are filed under. Almost always a metadata error, and invisible without joining the two sources. |
-| `v_runs` | Run history with the policy each one enforced and its duration. |
-| `v_score_history` | Every score a dataset has ever had, with the engine that produced it. |
-| `v_federation_timeline` | The federation over time, one point per finished run. `declared`, `healthy`, `blocked`, `unreachable`, `unhandled`, `pending` and `federated` are federation-wide; the `checked_*` columns are that run's own tally. |
-| `v_regressions` | Healthy at some point, not healthy now, with `last_healthy_at`. This is what `degraded` would have been, derived instead of stored. |
+Three are worth explaining.
 
-`pending` is not a recorded status: it is what `v_dataset_current` reports for a
-dataset that is declared but has never been validated.
+**`v_dataset_current`** is a `DISTINCT ON (d.id) ... ORDER BY d.id,
+v.checked_at DESC NULLS LAST` — PostgreSQL's idiomatic latest-row-per-group.
+The `LEFT JOIN` plus `COALESCE(v.status, 'pending')` is what gives a
+newly-synced dataset the status `pending`: declared, mirrored, never validated.
+That is why `run new` selects `{unknown, pending}` — both mean "no verdict yet".
+
+**`v_attention`** sorts by `(required_score IS NULL)` first, so datasets that
+were never scored sort **last**. They need an ERDDAP fixed, not metadata, and
+putting them at the top would bury the ones a data manager can act on.
+`points_short` is the distance to the threshold; `detail` is the failure list
+joined, falling back to `error_message`.
+
+**`v_facility_mismatch`** compares `lower(replace(emso_facility, ' ', '_'))`
+against the directory name. Almost always a metadata error at the facility, and
+invisible without joining the two sources.
+
+### Inline migrations
+
+`002_views.sql` starts with migrations that must run **before** any view
+references the new shape: the `run.status` → `run.outcome` rename, folding the
+old `aborted` outcome into `failed`, and backfilling `federation_*` for runs
+that finished before those columns existed.
+
+The backfill is reconstructible from the `validation` table alone — the state of
+a dataset at a past moment is its latest validation *as of* that moment — and is
+idempotent twice over (`WHERE federation_healthy IS NULL`, and only finished
+runs). Adding a migration means adding it here, above the views.
+
+---
 
 ## Operating
 
-The database is configured entirely from the repository-root `.env`, which
-`./gate.py autodeploy` creates:
+The database runs as the `database` service in
+[`docker-compose.yaml`](../docker-compose.yaml), image `postgres:17.11-alpine`,
+data in `database/pgdata`, bound to `127.0.0.1:5432` by default. It runs as
+`${UID}:${GID}` rather than the image's default user, so nothing in the working
+tree ends up owned by a uid you cannot clean up without `sudo`.
 
 ```bash
-./gate.py autodeploy        # writes .env and database/.env, generates secrets
-docker compose up -d database
+# schema only, then exit
 ./gate.py init-db
+
+# a shell
+docker compose exec database psql -U gate -d emso_gate
+
+# from the host, if GATE_DB_PORT is published
+psql "$(grep -E '^POSTGRES_' .env | ...)"   # or just use the container
 ```
 
-Backup:
+Useful queries:
+
+```sql
+-- what needs attention right now
+SELECT facility, dataset_id, status, required_score, points_short, detail
+FROM v_attention LIMIT 20;
+
+-- the federation over time (plot the federation_* columns, not datasets_*)
+SELECT * FROM v_federation_timeline ORDER BY started_at;
+
+-- one dataset's whole history
+SELECT * FROM v_score_history WHERE dataset_id = 'OBSEA_seabed_station_TS_L1b';
+
+-- did a specifications bump move the scores?
+SELECT specs_version, AVG(required_score)
+FROM validation v JOIN run r ON r.id = v.run_id
+GROUP BY specs_version;
+```
+
+### Backups
+
+`database/pgdata` is a bind mount, so a filesystem snapshot works, but the
+supported route is a dump:
 
 ```bash
-docker compose exec database pg_dump -U gate emso_gate | gzip > gate-$(date +%F).sql.gz
+docker compose exec -T database pg_dump -U gate emso_gate | gzip > gate-$(date +%F).sql.gz
 ```
 
-`report_json` holds the compliance engine's report verbatim. It is the bulk of
-the data, and what makes a future policy change replayable against past runs
-without re-validating the federation. It is also the **only** copy - the gate
-writes the engine's JSON into a temporary directory that is removed when the
-run ends, so there is no report tree on disk. If the database grows
-uncomfortable, that column is the first thing to prune, at the cost of that
-replayability.
+Nothing here is irreplaceable except the **history**: the registry is in git and
+`datasets.xml` is regenerated from the database on every run. Losing the
+database means losing the audit trail and one `run all` to rebuild the current
+state.
 
-Rotating the password is `./gate.py password-rotate`, which `ALTER ROLE`s the
-live cluster *before* touching `.env`, so a failure leaves the deployment
-consistent.
+### Credentials
+
+`POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` come from the
+repository-root `.env` — the same file the postgres image reads, so they cannot
+drift from the running server. Rotate with `./gate.py password-rotate`, which
+also issues the `ALTER ROLE` the running cluster needs: the image reads
+`POSTGRES_PASSWORD` at `initdb` only, so editing `.env` alone changes nothing.
+See [`../OPERATIONS.md`](../OPERATIONS.md).
+
+`database/.env` holds only `POSTGRES_INITDB_ARGS`, which is read at cluster
+creation and has no effect afterwards.

@@ -1,122 +1,213 @@
 # The federation registry
 
-Which datasets the central EMSO ERDDAP federates. This directory belongs to
-the regional facilities; the policy that judges them is `validation-gate.yaml`
-at the repository root, which does not.
+This directory is the list of datasets EMSO offers. One directory per regional
+facility, one YAML file per ERDDAP server inside it:
 
-Every `.yaml` and `.yml` under `federation/` is scanned, at any depth.
+```
+federation/
+├── Balearic_Sea/
+│   └── OBSEA.yaml            <- one ERDDAP server
+├── Ligurian_Sea/
+│   ├── EMSO-FR.yaml          <- two servers in one facility is fine
+│   └── OSUPYTHEAS.yaml
+└── EXAMPLE.yaml.template     <- copy this for a new server
+```
+
+Currently **207 datasets** across **16 service files** in **13 facilities**.
+
+> **For data managers.** This is the only directory you need. The gate's
+> configuration, code and workflows live elsewhere and you do not have to
+> touch them.
+
+The directory name is the **facility**, and it is also the unit of access:
+everyone listed for `federation/Balearic_Sea` may edit anything inside it. The
+file name is the **service** — a label for one ERDDAP server, not a facility of
+its own.
+
+---
 
 ## One file, one ERDDAP server
 
 ```yaml
 service:
-  url: "https://data.obsea.es"        # /erddap is appended when missing
-
+  url: https://data.obsea.es/erddap
   datasets:
-    OBSEA_seabed_station_TS_L1b:      # defaults: tabledap, derived URL
+    OBSEA_seabed_station_TS_L1b:
     OBSEA_seabed_station_TS_L1c:
-      url: "https://other/erddap/tabledap/Renamed"
-      type: "tabledap"                # tabledap | griddap
-      defaultQuery: "time%2CTEMP&time>=2015-04-15T00%3A00%3A00Z"
+    OBSEA_moored_buoy_meteo_L1b:
 ```
 
-A bare datasetID with nothing after it is the common case and the form to
-copy. Everything else is an override and reads like one.
+That is a complete, valid file. Three things are worth knowing:
 
-**The facility is the directory**, not anything inside the file. Moving a file
-between directories moves its datasets between facilities and nothing else has
-to change. The file name is the service - conventionally whose server it is -
-and carries no meaning; rename freely. The directory names mirror the
-`emso-erddap` facility directories exactly, so the two repositories stay
-diffable: the Balearic Sea facility is `federation/Balearic_Sea/`, and `OBSEA`
-is the name of the ERDDAP server inside it, not a facility of its own.
+- **A bare datasetID is the normal case.** The trailing colon is YAML for "this
+  key has no value"; it is not a typo and it must be there.
+- **The source URL is derived**, as `<url>/<type>/<datasetID>` — so
+  `OBSEA_seabed_station_TS_L1b` above resolves to
+  `https://data.obsea.es/erddap/tabledap/OBSEA_seabed_station_TS_L1b`.
+- **`/erddap` is appended if you leave it off.** `https://data.obsea.es` and
+  `https://data.obsea.es/erddap` mean the same thing here.
 
-A facility that federates from more than one server gets more than one file:
+You only need a body under a datasetID to override one of those defaults.
 
-```
-federation/Ligurian_Sea/EMSO-FR.yaml       10 datasets
-federation/Ligurian_Sea/OSUPYTHEAS.yaml    21 datasets
-```
+---
 
 ## Fields
 
-There are five keys in total, and **anything else under a datasetID is a hard
-error**. A silently ignored `defaultquery` would produce a federation whose
-graphs are wrong in a way nobody can see from the registry.
+### `service.url` — required
 
-| under `service:` | |
-| --- | --- |
-| `url` | **required.** The ERDDAP base URL. `/erddap` is appended when missing. |
-| `datasets` | **required.** Mapping of datasetID to its overrides, or nothing. |
+The base URL of your ERDDAP. Normalised: a trailing slash is stripped and
+`/erddap` is appended when missing.
 
-| per dataset | |
-| --- | --- |
-| `url` | Full source URL. Only needed when it is not `<service url>/<type>/<datasetID>`. |
-| `type` | `tabledap` or `griddap`. Defaults to `tabledap`. There is no service-wide default. |
-| `defaultQuery` | Percent-encoded; becomes `<defaultGraphQuery>` in `datasets.xml`. |
+### `service.datasets` — required, at least one
 
-**There is no `enabled` key, and no `comment` or `label`.** A dataset is either
-declared or it is not: to take one out of the federation, delete its line. The
-gate marks it `removed_at` in the database rather than forgetting it, so its
-validation history survives and comes back if it is re-declared. Writing
-`enabled: false` under a datasetID fails the registry check by name.
+A mapping of datasetID to either nothing or an override body. A datasetID must
+match `^[a-zA-Z][a-zA-Z0-9_.\-]*$` — a letter, then letters, digits, underscore,
+dot or hyphen.
 
-Every datasetID must match `^[a-zA-Z][a-zA-Z0-9_.\-]*$` and be unique across
-the *whole* federation, not just your file. ERDDAP keys the federation on the
-datasetID and rejects the entire `datasets.xml` over one illegal one, which
-would be a silent hole in everybody's federation, not just yours.
+This is checked here because ERDDAP refuses the **entire** `datasets.xml` over
+one illegal datasetID. Catching it in the pull request is the difference
+between a red check on your branch and the whole federation serving a stale
+file.
+
+datasetIDs must also be **unique across the whole federation**, not just your
+file — ERDDAP keys everything on them. If another facility already declares
+your ID, the `registry` check names the file that claimed it.
+
+### Per-dataset overrides
+
+Only three keys are accepted. Anything else is rejected by name, rather than
+ignored:
+
+| Key | Default | When you need it |
+|---|---|---|
+| `type` | `tabledap` | `griddap` for gridded datasets |
+| `url` | derived | the dataset is not at `<service url>/<type>/<datasetID>` |
+| `defaultQuery` | none | to control the graph ERDDAP shows by default |
+
+```yaml
+service:
+  url: https://data.obsea.es/erddap
+  datasets:
+    # the common case
+    OBSEA_seabed_station_TS_L1b:
+
+    # a gridded dataset
+    OBSEA_model_output:
+      type: griddap
+
+    # somewhere other than the derived location
+    OBSEA_special_case:
+      url: https://different.host/erddap/tabledap/OBSEA_special_case
+
+    # a default graph
+    OBSEA_seabed_station_TS_L1c:
+      defaultQuery: "time%2CTEMP&time>2015-04-15T00%3A00%3A00Z&.draw=linesAndMarkers"
+```
+
+**`defaultQuery` encoding — the one genuine trap.** Percent-encode the query
+itself (`%2C` for a comma, `%3A` for a colon), but write `&`, `<` and `>`
+literally. The gate escapes XML metacharacters when it generates
+`datasets.xml`, so an `&amp;` written here is emitted as `&amp;amp;` and the
+graph will not load.
+
+---
 
 ## Before you commit
 
-```bash
-./gate.py check
-```
-
-Offline, no database, no compliance engine, a second or two. It catches
-malformed YAML, a missing `service` or `datasets` mapping, illegal datasetIDs,
-duplicates across facilities, and unknown keys. The same check runs in CI
-before anything is validated or deployed, because the gate builds the
-federation all-or-nothing: one malformed file means no `datasets.xml` is
-written at all.
-
-To see your compliance score before the gate does, run the same engine
-locally:
+Run the registry check locally if you have Python. It needs no database, no
+network and no credentials:
 
 ```bash
-pip install emso-metadata-harmonizer
-python3 -c 'from emso_metadata_harmonizer import metadata_report; \
-  metadata_report("https://<your-erddap>/erddap/info/<datasetID>/index.html", \
-                  specs_version="v1.0.7")'
+pip install 'PyYAML>=6.0' 'rich>=13.0' 'psycopg2-binary>=2.9,<3'
+python3 gate.py check
 ```
 
-Use the same `specs_version` as the root `validation-gate.yaml`, or your
-numbers will not match the gate's.
+It prints every facility, its server and its dataset count, and exits non-zero
+on the first problem. This is exactly what the `registry` check runs on your
+pull request, so a green run here means a green check there.
 
-## When a dataset is blocked
+If you would rather not install anything, skip it — opening the pull request
+runs the same check in a few seconds.
 
-There is no report tree on disk. The engine's report is stored verbatim in
-PostgreSQL, in `validation.report_json`, and that is the only copy - the gate
-writes the JSON into a temporary directory that is removed when the run ends.
+---
 
-Read it through Grafana (the *EMSO* folder: **Needs attention** is sorted
-closest to the threshold first, and the per-dataset dashboard shows every
-score a dataset has ever had), or from the central node:
+## What gets rejected, and why
 
-```bash
-./gate.py status                       # attention, regressions, recent runs
-./gate.py list blocked --rf <Facility> # your facility only
-./gate.py list blocked --out mine.csv  # the same, as CSV
-```
+The registry is built **all or nothing**: one malformed file means no
+`datasets.xml` is written at all. That is why these are refused early and by
+name, rather than guessed at.
 
-Datasets a point or two short usually share one fixable template, so fixing it
-once clears several together.
+| Message | Cause |
+|---|---|
+| `malformed YAML` | usually indentation, or a missing trailing colon |
+| `expected a 'service' mapping` | the top-level `service:` key is missing |
+| `service has no url` | `service.url` is absent or empty |
+| `service has no datasets` | `datasets:` is missing or empty |
+| `is not a legal ERDDAP datasetID` | the ID does not match the pattern above |
+| `is already declared in <file>` | that datasetID exists elsewhere in the federation |
+| `has unknown key(s)` | a typo such as `defaultquery` or `protocol` |
+| `has type 'x'; expected tabledap, griddap` | unsupported protocol |
+| `must be empty or a mapping` | a scalar under a datasetID, e.g. `MY_ID: tabledap` |
 
-After a fix, nothing in this directory needs to change: press **Run workflow**
-on the `validation-gate` action. It runs `pending`, which re-checks everything
-not currently healthy, and it needs only the write access you already have to
-push here.
+Note the last one: `MY_ID: tabledap` is **not** how you set the protocol.
+Use `MY_ID:` followed by an indented `type: griddap`.
 
-## Example
+---
 
-`EXAMPLE.yaml.template` is a commented reference. It is not loaded: only
-`.yaml` and `.yml` are scanned.
+## After it is merged
+
+Being in this file means the dataset is **declared**, not that it is federated.
+Declaring it is your half; passing the compliance check is the other half, and
+that is measured against your own ERDDAP's metadata.
+
+A newly declared dataset is scored on the next run. If it passes it is written
+into `datasets.xml` and the central ERDDAP is asked to reload just that dataset
+— the rest of the federation keeps serving throughout.
+
+If it does not pass, it is recorded as `blocked`, `unreachable` or `unhandled`,
+with the reasons, and simply does not appear in the catalogue. Nothing else
+breaks. See ["When your dataset is blocked"](../README.md#when-your-dataset-is-blocked).
+
+**Removing a dataset** is deleting its line. The gate marks it removed and
+drops it from `datasets.xml` on the next run, but keeps its validation history
+— that history is the answer to "why was this dropped?".
+
+---
+
+## Adding a new ERDDAP server
+
+1. Copy [`EXAMPLE.yaml.template`](EXAMPLE.yaml.template) to
+   `federation/<Your_Facility>/<ServerName>.yaml`.
+2. Set `service.url` and list your datasets.
+3. If the facility directory is new, ask an administrator to add a group for it
+   in [`.github/access/access.yaml`](../.github/access/access.yaml) — otherwise
+   nobody owns the new folder and `authorize` will refuse every pull request
+   that touches it, including yours.
+
+---
+
+## For maintainers
+
+The loader is `validation_gate/federation.py`. It builds a `Dataset` per
+declared ID and refuses to guess: every malformed input raises `RegistryError`
+naming the file.
+
+Two derived properties are worth knowing before changing anything:
+
+- **`Dataset.info_url`** normalises everything to
+  `<base>/info/<id>/index.html`. The compliance engine's URL parser understands
+  `/erddap/tabledap/<id>` and `/erddap/info/<id>/index.html` but **not**
+  `/erddap/griddap/<id>`, and the info form is the only one that works for both
+  protocols.
+- **`Dataset.server`** is the hostname, used by `shuffle_datasets()` to
+  interleave work across servers so the thread pool does not point twenty
+  concurrent requests at one regional ERDDAP.
+
+`Federation.get_datasets(how)` implements the three run modes. `new` selects
+datasets whose database status is `unknown` *or* `pending` — absent from the
+database entirely, and mirrored by `sync_federation` but never validated, both
+mean the same thing to a run.
+
+`.regen_from_xml.py` regenerated these files from the old `emso-erddap` XML
+fragments during the migration. It is kept for reference and is not part of any
+workflow.
