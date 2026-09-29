@@ -52,6 +52,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
+    outputs:
+      # Whether this pull request is nothing but facility records. The automerge
+      # job below reads it; see the comment there for why it matters.
+      data_only: ${{ steps.authz.outputs.data_only }}
+
     steps:
       # The base branch, explicitly: this is the trusted copy of access.yaml
       # and manage_access.py. Checking out the pull request's copy would let it
@@ -69,6 +74,7 @@ jobs:
       - run: pip install --quiet 'PyYAML>=6.0'
 
       - name: Every commit author must own every changed path
+        id: authz
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -100,6 +106,30 @@ jobs:
 
           echo "changed paths:"
           sed 's/^/  /' changed.txt
+
+          # Is this pull request nothing but facility records? Exactly
+          # federation/<facility>/<name>.yaml and nothing else - not the
+          # README in that folder, not the .template, not a nested path.
+          # Recorded before the authorization verdict below, because this step
+          # exits non-zero when it denies and a later `echo` would never run.
+          #
+          # Counted rather than written as `grep -qv`, deliberately. Whether
+          # `-q` and `-v` together report "a line failed to match" is not
+          # consistent across grep implementations - ugrep returns 1 where GNU
+          # grep returns 0 - and silently inverting this test would auto-merge
+          # code. Comparing a match count against the line count cannot be read
+          # two ways. `|| true` because grep exits 1 on a zero count and this
+          # script runs under `set -e`.
+          total=$(wc -l < changed.txt)
+          records=$(grep -cE '^federation/[^/]+/[^/]+\.yaml$' changed.txt || true)
+          echo "paths: $total, of which facility records: $records"
+          if [ "$total" -eq "$records" ]; then
+            echo "data_only=true" >> "$GITHUB_OUTPUT"
+            echo "scope: facility records only"
+          else
+            echo "data_only=false" >> "$GITHUB_OUTPUT"
+            echo "scope: changes more than facility records, so no automerge"
+          fi
 
           # GitHub resolves each commit's author email to an account, so there
           # is no email-to-username map to maintain here - and an address that
@@ -228,4 +258,95 @@ jobs:
             cat registry.txt 2>/dev/null \
               || echo 'the registry check produced no output; see the step log'
             echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # -------------------------------------------------------------------------
+  # Hands off: a facility opens a pull request and touches nothing else.
+  #
+  # Limited to pull requests that change only facility records. Code, workflows
+  # and access.yaml are admin-authored by definition - `authorize` refuses them
+  # from anyone else - and those merge by hand on purpose. Two reasons: a typo
+  # in the gate should not deploy itself unreviewed, and auto-merging admin
+  # pull requests would merge the first commit the moment it went green, which
+  # makes ordinary iterative work impossible.
+  #
+  # This job executes no repository code and checks nothing out. It only calls
+  # the API, which is why it can safely hold write permissions in a
+  # pull_request_target workflow.
+  # -------------------------------------------------------------------------
+  automerge:
+    name: automerge
+    needs: [authorize, registry]
+    if: >-
+      needs.authorize.outputs.data_only == 'true'
+      && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write        # the merge
+      pull-requests: write   # the merge
+      actions: write         # dispatching the deployment
+
+    steps:
+      - name: Merge, then hand over to the deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # The ruleset is still the authority. GITHUB_TOKEN is in no bypass
+          # list, so this call succeeds only while `authorize` and `registry`
+          # are green on the head commit - this job cannot merge anything the
+          # rules would refuse. It merges directly rather than arming GitHub's
+          # auto-merge because it already knows both checks passed: it needed
+          # them.
+          #
+          # GitHub can take a moment to publish the conclusions the ruleset
+          # reads, so an early attempt may be refused for a merge that is
+          # perfectly valid a few seconds later. The second check covers the
+          # case where the merge landed but the CLI still reported an error.
+          merged=no
+          for attempt in 1 2 3 4 5; do
+            if gh pr merge "$PR" --squash; then
+              merged=yes; break
+            fi
+            if [ "$(gh pr view "$PR" --json merged --jq .merged)" = "true" ]; then
+              merged=yes; break
+            fi
+            echo "attempt $attempt refused; waiting for the ruleset to see the checks"
+            sleep 10
+          done
+
+          if [ "$merged" != "yes" ]; then
+            echo "::error::could not merge #$PR after five attempts. Nothing was" \
+                 "merged and nothing was deployed. Merge it by hand and check why:" \
+                 "a required check may have been re-run, or the branch may conflict" \
+                 "with main."
+            exit 1
+          fi
+          echo "merged #$PR"
+
+          # A push made with GITHUB_TOKEN raises no push event, so validate.yml
+          # would never run and the federation would quietly stop updating while
+          # every pull request went green. workflow_dispatch is one of the two
+          # documented exceptions, so the deployment is dispatched explicitly.
+          #
+          # mode=new is what a human push used to do: score what this merge
+          # added, not all 206. trigger=push keeps the runs table honest - this
+          # is a push to main, performed by the gate rather than by a person.
+          gh workflow run validate.yml --ref main -f mode=new -f trigger=push
+          echo "dispatched validate.yml (mode=new) for #$PR"
+
+      - name: Summary
+        if: always()
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "### Automerge"
+            echo
+            echo "Pull request #$PR changed facility records only, both checks"
+            echo "passed, so it was merged and the deployment was dispatched."
           } >> "$GITHUB_STEP_SUMMARY"
