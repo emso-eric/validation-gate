@@ -16,6 +16,13 @@
 #                                     registry changed, so `new` would find
 #                                     nothing, but `pending` re-checks it.
 #
+# The `mode` and `trigger` inputs exist for one caller: the automerge job in
+# pr-gate.yml, which dispatches this workflow with mode=new after it merges a
+# facility record. It has to dispatch rather than rely on the push trigger,
+# because a merge performed with GITHUB_TOKEN raises no push event at all -
+# workflow_dispatch is one of the two documented exceptions to that rule. Leave
+# both at their defaults when you run this by hand.
+#
 # Both triggers do the same three things, in /opt/gate: fast-forward to the
 # commit on GitHub, parse the registry, then validate and federate.
 #
@@ -34,6 +41,17 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: what to validate
+        type: choice
+        default: pending
+        options: [new, pending, all]
+      trigger:
+        description: how the runs table should record this run
+        type: choice
+        default: manual
+        options: [manual, push, schedule]
 
 # One gate run at a time. Two concurrent runs would race on datasets.xml and
 # the loser would deploy a stale file. The gate also holds a PostgreSQL
@@ -52,8 +70,10 @@ env:
   GATE_DEPLOYMENT: ${{ vars.GATE_DEPLOYMENT || '/opt/gate' }}
 
   # A push validates what it added; the manual button re-checks what is broken.
-  MODE: ${{ github.event_name == 'workflow_dispatch' && 'pending' || 'new' }}
-  TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'push' }}
+  # A dispatch carries both explicitly, so the automerge job can ask for exactly
+  # what a push used to do - and have the runs table say so.
+  MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'new' }}
+  TRIGGER: ${{ github.event_name == 'workflow_dispatch' && inputs.trigger || 'push' }}
 
 jobs:
   gate:
@@ -146,9 +166,12 @@ jobs:
       - name: Validate the registry
         run: venv/bin/python gate.py check
 
+      # No GATE_DATABASE_URL here. The runner is the database host, so the
+      # credentials come from $GATE_DEPLOYMENT/.env, which is where
+      # `gate.py password-rotate` writes them. A repository secret would be a
+      # second copy of the same password that rotation cannot reach, and it
+      # would drift silently the first time the password changed.
       - name: Validate, record and federate
-        env:
-          GATE_DATABASE_URL: ${{ secrets.GATE_DATABASE_URL }}
         run: |
           set +e
           venv/bin/python gate.py run "$MODE" --trigger "$TRIGGER"
@@ -167,8 +190,6 @@ jobs:
       # facility actually reads after pressing the button.
       - name: Federation summary
         if: always()
-        env:
-          GATE_DATABASE_URL: ${{ secrets.GATE_DATABASE_URL }}
         run: |
           {
             echo '### Federation status'
