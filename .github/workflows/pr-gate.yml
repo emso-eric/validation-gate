@@ -292,10 +292,16 @@ jobs:
       - name: Merge, then hand over to the deployment
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
 
+          # This job deliberately does not check the pull request out - on
+          # `pull_request_target` that would put untrusted code next to a
+          # write-scoped token. Without a working copy `gh` has no git remote
+          # to infer the repository from, so every call names it with -R.
+          #
           # The ruleset is still the authority. GITHUB_TOKEN is in no bypass
           # list, so this call succeeds only while `authorize` and `registry`
           # are green on the head commit - this job cannot merge anything the
@@ -307,23 +313,27 @@ jobs:
           # reads, so an early attempt may be refused for a merge that is
           # perfectly valid a few seconds later. The second check covers the
           # case where the merge landed but the CLI still reported an error.
+          # It reads `state`, because `merged` is not a field `gh pr view`
+          # knows and asking for one it does not know is itself an error.
           merged=no
           for attempt in 1 2 3 4 5; do
-            if gh pr merge "$PR" --squash; then
+            if gh pr merge "$PR" -R "$REPO" --squash; then
               merged=yes; break
             fi
-            if [ "$(gh pr view "$PR" --json merged --jq .merged)" = "true" ]; then
+            if [ "$(gh pr view "$PR" -R "$REPO" --json state --jq .state)" = "MERGED" ]; then
               merged=yes; break
             fi
-            echo "attempt $attempt refused; waiting for the ruleset to see the checks"
+            echo "attempt $attempt did not merge; retrying in 10s"
             sleep 10
           done
 
           if [ "$merged" != "yes" ]; then
             echo "::error::could not merge #$PR after five attempts. Nothing was" \
-                 "merged and nothing was deployed. Merge it by hand and check why:" \
-                 "a required check may have been re-run, or the branch may conflict" \
-                 "with main."
+                 "merged and nothing was deployed. Merge it by hand, and read the" \
+                 "gh output above for the reason rather than assuming the ruleset" \
+                 "refused it: a required check may have been re-run, the branch may" \
+                 "conflict with main, or the call may have failed before the ruleset" \
+                 "ever saw it."
             exit 1
           fi
           echo "merged #$PR"
@@ -336,7 +346,7 @@ jobs:
           # mode=new is what a human push used to do: score what this merge
           # added, not all 206. trigger=push keeps the runs table honest - this
           # is a push to main, performed by the gate rather than by a person.
-          gh workflow run validate.yml --ref main -f mode=new -f trigger=push
+          gh workflow run validate.yml -R "$REPO" --ref main -f mode=new -f trigger=push
           echo "dispatched validate.yml (mode=new) for #$PR"
 
       - name: Summary
