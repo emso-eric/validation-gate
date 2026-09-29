@@ -55,6 +55,7 @@ LOG_LEVELS = ("debug", "info", "warning", "error")
 
 logger = logging.getLogger("gate")
 
+input("THIS SHOULD NOT HAPPEN")
 
 def setup_logging(level: str, log_dir: str | None = None) -> None:
     numeric = getattr(logging, level.upper(), logging.INFO)
