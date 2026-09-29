@@ -12,20 +12,21 @@ so a data manager who may edit ``federation/Azores/`` can also, as far as the
 API is concerned, edit ``gate.py``. Two mechanisms close that, and they are
 layered on purpose:
 
-  push rulesets   refuse the push itself, server-side, on a private or
-                  internal repository. This is the enforcement. One ruleset
-                  per facility, restricting that facility's folder and
-                  bypassed by that facility's team - see README.md. Configured
-                  in the web UI; nothing here writes them.
-  this script     runs in CI after the push has landed and fails the job, so
-                  the gate never runs and nothing reaches the central ERDDAP.
-                  A brake rather than a lock, and deliberately kept: it is the
-                  only part of the access rules that is version-controlled,
-                  diffable and testable, so it catches a ruleset that was
-                  disabled, mis-scoped or never created for a new facility.
+  pr-gate.yml     the `authorize` job calls this script as a required check on
+                  every pull request, from the base branch's copy. A pull
+                  request whose author does not own a changed path cannot be
+                  merged. This is the enforcement.
+  validate.yml    the same script again, after the push has landed, failing
+                  the job so the gate never runs and nothing reaches the
+                  central ERDDAP. A brake rather than a lock, and deliberately
+                  kept: it is version-controlled, testable offline and fails
+                  closed, so it catches branch protection that was disabled or
+                  never applied to a new branch pattern.
 
-There is no CODEOWNERS and no pull-request path: access is controlled by
-filtering pushes, not by review.
+Push rulesets are not used: they apply only to private and internal
+repositories, and this one is public. Access is enforced by refusing the
+merge, not by filtering the push. There is no CODEOWNERS - the required check
+is the review, and the branch rule asks for zero approvals.
 
 access.yaml
 -----------

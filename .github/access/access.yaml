@@ -7,14 +7,17 @@
 #
 # Enforcement, weakest last:
 #
-#   1. A push ruleset rejects the push outright, server-side. Strongest, and it
-#      does scale to thirteen facilities - one ruleset per facility, restricting
-#      that facility's folder, bypassed by that facility's team. See
-#      .github/access/README.md.
+#   1. The `authorize` job in .github/workflows/pr-gate.yml is a required check
+#      on a branch ruleset, so an unauthorised pull request cannot be merged.
+#      This is the lock. It runs on pull_request_target from the base branch,
+#      so the change being judged cannot edit the rule judging it.
 #   2. The "Enforce access rules" step in .github/workflows/validate.yml fails
 #      the run, so `gate.py run` never executes and an unauthorised change
-#      never reaches the central ERDDAP. This is what scales to one group per
-#      facility.
+#      never reaches the central ERDDAP. A backstop, not a lock: the commit has
+#      already landed by then.
+#
+# Push rulesets are NOT used. They apply only to private and internal
+# repositories, and this one is public. See .github/access/README.md.
 #
 # Group names are arbitrary labels. A user may appear in several groups; a
 # group may own several folders. `folders: ["*"]` means the whole repository.
