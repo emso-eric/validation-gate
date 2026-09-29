@@ -21,3 +21,4 @@ service:
     OBSEA_seabed_station_currents_L1c:
     OBSEA_seabed_station_pictures_L0a:
     OBSEA_seabed_station_waves_L1b:
+    OBSEA_this_dataset_doesnt_exist:
