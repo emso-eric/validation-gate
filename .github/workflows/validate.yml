@@ -40,6 +40,16 @@ name: validation-gate
 on:
   push:
     branches: [main]
+    # Documentation cannot change what the gate would decide, and a run is not
+    # free: it takes the advisory lock, regenerates datasets.xml and reloads
+    # the central ERDDAP. A typo fix should not do any of that. Only prose is
+    # listed here - never a path that feeds a decision, so federation records,
+    # validation-gate.yaml, access.yaml and the workflows all still trigger a
+    # run. A facility that needs one anyway can press Run workflow, which is
+    # unaffected by this filter.
+    paths-ignore:
+      - '**.md'
+      - LICENSE
   workflow_dispatch:
     inputs:
       mode:
