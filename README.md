@@ -215,11 +215,13 @@ and is not installed; add it deliberately if a nightly re-check is wanted.
 GitHub has no per-folder write permission, so `.github/access/access.yaml` is
 the single source that compiles into the mechanisms that do exist:
 
+Access is controlled by **filtering pushes**. There is no `CODEOWNERS` and no
+pull-request path: a facility pushes to `main` and is either allowed to or is
+not, with no human in the loop.
+
 ```bash
 python3 .github/access/manage_access.py show         # the effective map
-python3 .github/access/manage_access.py codeowners   # -> .github/CODEOWNERS
 python3 .github/access/manage_access.py check --author X --changed-files F
-python3 .github/access/manage_access.py sync --repository owner/name
 ```
 
 **The `Enforce access rules` step in `validate.yml`** runs `check` against
@@ -229,21 +231,30 @@ author but the push is authenticated - for every path in
 `gate.py run` never executes, so an unauthorised edit never reaches the central
 ERDDAP. This is a brake, not a lock: the commit is already in the branch.
 
-**A push ruleset** is the only thing that refuses the push itself. It needs a
-private or internal repository, and it scales to all thirteen facilities as one
-ruleset per facility - restricting that facility's folder, bypassed by that
-facility's team - plus a base ruleset restricting everything outside
-`federation/`. See [`.github/access/README.md`](.github/access/README.md).
+**A push ruleset** is the intended enforcement, and the only thing that refuses
+the push itself. It scales to all thirteen facilities as one ruleset per
+facility - restricting that facility's folder, bypassed by that facility's team
+- plus a base ruleset restricting everything outside `federation/`. See
+[`.github/access/README.md`](.github/access/README.md) for the layout and the
+constraints.
 
-`CODEOWNERS` and `access-guard.yml` are the pull-request path, and are dormant
-while everything goes in by push. Run `codeowners` after every edit to
-`access.yaml` and commit the result.
+**It is not in force yet.** Rulesets are not enforced on private repositories
+under GitHub Free, which is the `emso-eric` plan today, so the CI step above is
+currently the only mechanism. Creating the rulesets before the plan changes
+achieves nothing.
 
-`sync` pushes the collaborator list (repository-wide `push`, or `admin` for a
-group owning `"*"`) and needs `$GITHUB_TOKEN` with `repo` scope. Run it by hand,
-never from CI - a workflow that can grant access is a workflow a commit can use
-to grant itself access. It never removes a collaborator; stale ones are
-reported.
+The two are kept deliberately, in that order: the ruleset enforces, the CI step
+is the version-controlled backstop. Rulesets live in GitHub's settings where
+nothing in this repository can diff, test or roll them back, so a ruleset that
+was disabled or never created for a new facility fails silently and open. The
+CI step is testable offline and fails closed, which turns that into a red run.
+Keep the ruleset table in `.github/access/README.md` and `access.yaml` in step
+by hand; nothing reconciles them.
+
+Changing who has access is two edits: the group in `access.yaml`, and the
+team's membership in the GitHub UI. Nothing in this repository can grant
+access - deliberately, since a tool that can is a tool a commit can use to
+grant itself access.
 
 `access.yaml` is committed, because CI cannot read a file that is not. It holds
 GitHub usernames only - no email addresses. Usernames are already visible to

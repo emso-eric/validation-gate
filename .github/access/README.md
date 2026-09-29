@@ -42,11 +42,19 @@ their own folder clears `core` through the exceptions and bypasses
 `facility-Balearic_Sea`; pushing into `federation/Azores/` they are stopped by
 `facility-Azores`; pushing `gate.py` they are stopped by `core`.
 
-Four things to know before relying on it:
+Five things to know before relying on it:
 
+- **The organization must be on GitHub Team or Enterprise.** This is the
+  binding constraint today: `emso-eric` is on GitHub Free, where private
+  repositories get a limited feature set and rulesets are *not enforced*. The
+  UI still lets you create them and shows "Your rulesets won't be enforced on
+  this private repository until you upgrade this organization account to
+  GitHub Team", so a ruleset on Free is decoration. Until the plan changes,
+  §2 is the only mechanism actually doing anything.
 - **Private or internal repositories only.** Push rulesets are not available on
-  public repositories - which is the binding constraint if this registry is
-  ever mirrored publicly.
+  public repositories. Note the trap: going public to escape the plan limit
+  does not work, because it removes push rulesets altogether. Public plus Free
+  gets you *branch* rulesets and no path filtering at all.
 - **Bypass entries are roles, teams and apps, not individual users.** A
   one-person facility still needs a one-person team, and teams mean an
   organization repository.
