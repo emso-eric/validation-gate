@@ -50,6 +50,13 @@ impossible.
 
 It also will not fire on a **draft** pull request. Mark it ready for review.
 
+If another facility merged while your pull request was open, it has to be
+brought up to date before it can merge — otherwise your records were never
+validated against theirs. For a branch in this repository the gate updates it
+for you and the checks re-run; nothing to do. For a pull request from a **fork**
+it cannot, and it will tell you to press **Update branch**. Either way this is
+not a rejection.
+
 ## After the merge
 
 The deployment runs on EMSO's own server, and does three things: fast-forward
@@ -160,7 +167,45 @@ head commit — this job cannot merge anything the rules would refuse. It merges
 directly rather than arming GitHub's auto-merge because it already knows both
 checks passed: it needed them.
 
-Two implementation details that are load-bearing:
+#### Keeping the branch current
+
+Required status checks are **strict**, so main must be an ancestor of the branch
+before it can merge. That is load-bearing rather than procedural. `registry`
+validates the pull request's own tree, and a duplicate `datasetID` collides only
+in the *union* of every facility's records — so two pull requests branched from
+the same base can each declare `Foo`, each pass `registry` alone, and produce a
+main that `build_federation()` refuses outright. No `datasets.xml` is written,
+the federation freezes on its last good file, and the error names whichever
+facility the registry walk reached second rather than either of the two that
+collided.
+
+Strictness alone would leave a facility looking at a red `automerge` with no way
+to know the fix is a button on their own pull request, so the job presses it:
+when `mergeStateStatus` is `BEHIND` it calls
+`PUT /repos/{repo}/pulls/{pr}/update-branch` and exits 0. That raises
+`synchronize`, this workflow re-runs, and `registry` judges the merged state —
+either passing, so a later `automerge` merges it unattended, or failing on the
+pull request that actually caused the collision, before deployment rather than
+after.
+
+It terminates because `update-branch` only moves the branch towards main, so
+each pass makes progress.
+
+Three details in that path:
+
+- **The API, not `gh pr update-branch`.** The subcommand is a recent addition;
+  this must not depend on the runner's `gh` version.
+- **`mergeStateStatus` is polled, not read once.** GitHub computes it lazily and
+  reports `UNKNOWN` until it has. Treating `UNKNOWN` as "fine" would send a
+  stale branch into the merge loop to fail five times without saying why. If it
+  never resolves the job falls through to that loop — the behaviour before this
+  existed — so a degraded read costs a clear message, not correctness.
+- **A fork cannot be updated.** `GITHUB_TOKEN` is scoped to this repository and
+  cannot push to someone else's; "allow edits by maintainers" does not extend to
+  it. The job says what to press instead of retrying something that cannot work.
+  `automerge` is not a required check, so a human can still merge.
+
+Two further implementation details that are load-bearing:
 
 **Every `gh` call names the repository with `-R "$REPO"`.** The job has no
 checkout step, so there is no git remote for `gh` to infer the repository from.

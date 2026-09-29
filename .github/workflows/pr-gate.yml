@@ -312,6 +312,68 @@ jobs:
           # auto-merge because it already knows both checks passed: it needed
           # them.
           #
+          # Bring the branch up to date before merging, if it is not.
+          #
+          # Required status checks are strict, so main must be an ancestor of
+          # the branch before it can merge. That is not bureaucracy: `registry`
+          # validates the pull request's own tree, and a datasetID collides only
+          # in the *union* of every facility's records. Two pull requests
+          # branched from the same base can each declare `Foo`, each validate
+          # cleanly alone, and produce a main that `build_federation()` refuses
+          # outright - no datasets.xml written, the whole federation frozen on
+          # its last good file, and the error naming whichever facility the walk
+          # reached second. Being current is what makes `registry` judge what
+          # will actually land.
+          #
+          # Strictness alone would leave a facility staring at a red automerge
+          # with no idea that the fix is a button on their own pull request, so
+          # the gate presses it. Updating the branch raises `synchronize`, which
+          # re-runs this workflow: `registry` then sees the merged state and
+          # either passes - and a later automerge merges it, unattended, which is
+          # the whole point - or fails honestly, on the pull request that caused
+          # the collision rather than on an innocent facility after deployment.
+          #
+          # This terminates: `update-branch` only ever fast-forwards the branch
+          # towards main, so each pass makes progress, and BEHIND is only
+          # re-entered if main moved again in the interval.
+          #
+          # mergeStateStatus is computed lazily and reports UNKNOWN until GitHub
+          # has worked it out, so it is polled rather than read once. UNKNOWN is
+          # not "fine" - falling through on it would send a stale branch into the
+          # merge loop below to fail five times for no stated reason.
+          merge_state=UNKNOWN
+          for _ in 1 2 3 4 5; do
+            merge_state=$(gh pr view "$PR" -R "$REPO" --json mergeStateStatus \
+                            --jq .mergeStateStatus)
+            [ "$merge_state" != "UNKNOWN" ] && break
+            sleep 5
+          done
+          echo "merge state: $merge_state"
+
+          if [ "$merge_state" = "BEHIND" ]; then
+            # Via the API, not `gh pr update-branch`: the subcommand is a recent
+            # addition and this must not depend on the runner's gh version.
+            #
+            # Expected to fail for a pull request from a fork. GITHUB_TOKEN is
+            # scoped to this repository and cannot push to someone else's, and
+            # "allow edits by maintainers" does not extend to it - so say what to
+            # do instead of retrying something that cannot work.
+            if gh api --silent --method PUT "repos/$REPO/pulls/$PR/update-branch"; then
+              echo "::notice::#$PR was behind main, so the gate updated the branch." \
+                   "pr-gate will re-run on the updated branch and merge it then if" \
+                   "the registry is still valid. Nothing to do."
+              exit 0
+            fi
+            echo "::error::#$PR is behind main and the gate could not update the" \
+                 "branch, which is expected for a pull request from a fork. Nothing" \
+                 "was merged and nothing was deployed. Press \"Update branch\" on the" \
+                 "pull request, or merge main into it - the checks then re-run and it" \
+                 "merges itself. This is not a rejection: it means another facility" \
+                 "merged first and your records have not been validated against" \
+                 "theirs yet."
+            exit 1
+          fi
+
           # GitHub can take a moment to publish the conclusions the ruleset
           # reads, so an early attempt may be refused for a merge that is
           # perfectly valid a few seconds later. The second check covers the
