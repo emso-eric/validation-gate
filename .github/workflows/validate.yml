@@ -1,5 +1,11 @@
 # ---------------------------------------------------------------------------
-# The validation gate.
+# The validation gate: deployment.
+#
+# This is the half that runs after a change has landed on main. It is not the
+# lock. Nothing reaches main except through a pull request that passed the
+# checks in pr-gate.yml, and that is where authorization is decided - before
+# the merge, on a hosted runner, from the base branch's copy of the rules.
+# Read pr-gate.yml first if you are trying to work out who may change what.
 #
 #   push to main      -> run new      only datasets never validated before, so
 #                                     adding one dataset scores one dataset,
@@ -93,12 +99,22 @@ jobs:
       # central ERDDAP. The offending commit stays in the branch for a human to
       # revert.
       #
-      # A push ruleset is the only thing that can refuse the push itself, and
-      # it is the enforcement. This step is kept anyway, as the backstop:
-      # rulesets live in GitHub's settings, where nothing in this repository
-      # can diff, test or roll them back, so one that was disabled, mis-scoped
-      # or never created for a new facility fails silently and open. This check
-      # is version-controlled, testable offline and fails closed.
+      # Push rulesets used to be the intended enforcement. They are not
+      # available: they require a private or internal repository, and this one
+      # is public. The enforcement is now the required check in pr-gate.yml,
+      # which refuses the merge. This step is kept as the backstop for the case
+      # branch protection is disabled, bypassed or never applied to a new
+      # branch pattern - it is version-controlled, testable offline and fails
+      # closed, which GitHub's settings are not.
+      #
+      # Known edge: this judges `github.actor`, the account that pushed, which
+      # on a merge is whoever pressed the button rather than the author of the
+      # work. A facility member merging an administrator's code pull request
+      # therefore fails here, after pr-gate.yml has already authorized it
+      # correctly. That is a false failure, not an escape: nothing is
+      # federated, and an administrator can re-run it with workflow_dispatch.
+      # The fix is to judge the pushed commits' authors instead, as pr-gate.yml
+      # does; left alone for now so the lock lands as one reviewable change.
       - name: Enforce access rules
         if: github.event_name == 'push'
         env:
