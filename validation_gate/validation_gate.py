@@ -308,7 +308,10 @@ class ValidationGate:
             # deliberately distinct from a bad score: nobody should be asked to
             # fix metadata over a KeyError in the tester.
             report.status = "unhandled"
-            report.error_message = f"{type(exc).__name__}: {exc}"
+            report.error_message = _safe_error(exc)
+            # The full text goes to the log file, which is gitignored and local
+            # to the deployment host, and never into the report that reaches the
+            # database, Grafana and the public step summary.
             logger.error("%s: the compliance engine broke: %s", dataset, exc)
         finally:
             report.duration_s = time.time() - started
@@ -415,7 +418,10 @@ class ValidationGate:
             )
         except Exception as exc:
             if _is_network_error(exc):
-                raise _Unreachable(f"{type(exc).__name__}: {exc}") from exc
+                # The type and status only. `exc` here is the transport failure
+                # from the fetch, so its text carries the URL and whatever the
+                # far end said - see _safe_error.
+                raise _Unreachable(_safe_error(exc)) from exc
             raise
 
         if not os.path.isfile(json_path):
@@ -581,6 +587,36 @@ class ValidationGate:
 # ---------------------------------------------------------------------------
 class _Unreachable(Exception):
     """The server did not answer. Distinct from the engine breaking."""
+
+
+def _safe_error(exc: BaseException) -> str:
+    """
+    The shape of a failure, never its content.
+
+    A facility chooses the URL the gate fetches, and exception text is where
+    content from that URL crosses into somewhere a person reads: a server
+    banner, a redirect target, a fragment of a body, or the URL itself with
+    whatever was appended to it. `gate.py summary` writes this string into the
+    GitHub Actions step summary, which on a public repository is world-readable,
+    and the Grafana `detail` column is built from the same field.
+
+    So: the exception type, plus the numeric HTTP status when there is one.
+    Both say what went wrong without quoting what answered, and an integer
+    cannot carry a response. A facility debugging its own server reads the same
+    two facts it would have taken from the full text; a facility pointing the
+    gate at something it should not learns nothing it did not already know.
+
+    `requests` is deliberately not imported to identify an HTTP error. The
+    engine and its dependencies are imported lazily so that `gate.py check`
+    stays offline with only PyYAML, psycopg2 and rich installed - see the
+    dependency list in pr-gate.yml. Reading `.response.status_code` off the
+    exception needs no import and no isinstance.
+    """
+    name = type(exc).__name__
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if isinstance(status, int):
+        return f"{name} (HTTP {status})"
+    return name
 
 
 def _is_network_error(exc: BaseException) -> bool:
