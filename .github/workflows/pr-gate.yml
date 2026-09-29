@@ -4,7 +4,7 @@
 # `main` is protected: nothing lands except through a pull request whose
 # required checks passed. This workflow is those checks.
 #
-#   authorize   every commit author in the pull request owns every path the
+#   authorize   the account that opened the pull request owns every path the
 #               pull request changes, per .github/access/access.yaml.
 #   registry    the registry the pull request would produce is valid - parses,
 #               no unknown keys, no illegal or duplicated datasetIDs across
@@ -73,12 +73,15 @@ jobs:
 
       - run: pip install --quiet 'PyYAML>=6.0'
 
-      - name: Every commit author must own every changed path
+      - name: The pull request author must own every changed path
         id: authz
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
+          # The account that opened the pull request, as asserted by GitHub.
+          # See the verdict below for why this and nothing else decides access.
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           set -euo pipefail
 
@@ -131,10 +134,9 @@ jobs:
             echo "scope: changes more than facility records, so no automerge"
           fi
 
-          # GitHub resolves each commit's author email to an account, so there
-          # is no email-to-username map to maintain here - and an address that
-          # belongs to no account yields an empty login, which fails closed
-          # below.
+          # Commit authorship, for the record only. This list decides nothing -
+          # read the verdict below for why.
+          #
           # Pipe-separated, not @tsv: a commit whose author is unresolvable has
           # an empty middle field, and `read` with a tab IFS collapses the two
           # adjacent tabs because tab is IFS whitespace - which silently shifts
@@ -147,56 +149,57 @@ jobs:
             > commits.txt
 
           echo
-          echo "commits:"
-          : > authors.txt
+          echo "commits (informational - not an authorization input):"
           while IFS='|' read -r sha login parents; do
-            # "Update branch" makes a merge commit authored by whoever pressed
-            # it, and it carries the base branch's files rather than the
-            # contributor's work. Judging it would deny pull requests for
-            # paths their author never touched.
             if [ "${parents:-0}" -ge 2 ]; then
-              echo "  $sha  merge commit, not judged"
-              continue
+              echo "  $sha  merge commit"
+            elif [ -z "$login" ]; then
+              echo "  $sha  author email linked to no GitHub account"
+            else
+              echo "  $sha  @$login"
             fi
-            if [ -z "$login" ]; then
-              echo "::error::commit $sha has an author email that is not linked to any" \
-                   "GitHub account, so there is no username to check against" \
-                   "access.yaml. Refused. Ask the author to add that address to their" \
-                   "GitHub account, or to re-commit with the address their account" \
-                   "already has."
-              exit 1
-            fi
-            echo "  $sha  @$login"
-            echo "$login" >> authors.txt
           done < commits.txt
 
-          sort -u -o authors.txt authors.txt
-
-          if [ ! -s authors.txt ]; then
-            echo "::error::this pull request contains no ordinary commits, only merge" \
-                 "commits. There is nothing whose authorship can be established."
-            exit 1
-          fi
-
-          # Every author must own every changed path, not merely their own
-          # commits. A facility pull request touches one folder and all that
-          # facility's members own it, so this costs nothing in practice - and
-          # it closes the case where two authors each own half the diff and
-          # neither is allowed the whole of it.
+          # The verdict. One subject: the account that opened this pull request.
+          #
+          # This used to judge each commit's `.author.login`, which GitHub
+          # derives from the `author.email` baked into the commit object. That
+          # field is chosen by whoever runs `git commit` - `--author="x <addr>"`
+          # sets it to anything, and the administrator's address is published in
+          # this repository's own history. Anyone could therefore open a fork
+          # pull request whose commits resolved to the administrator and be
+          # granted `folders: ["*"]` by the check meant to stop exactly that.
+          #
+          # `github.event.pull_request.user.login` is not derived from the
+          # contributor's data. It is the authenticated account GitHub recorded
+          # as opening the pull request, and nothing a branch contains can
+          # change it. So it grants, and commit authorship grants nothing.
+          #
+          # The commit loop above is kept as output, not as a gate, on purpose:
+          # as a hard failure it could only ever deny a pull request that this
+          # check has already authorized by its author, and its "email is not
+          # linked to any GitHub account" case failed contributors for a
+          # condition they often cannot diagnose. Authority now rests on the one
+          # identity that is authenticated, so re-judging a spoofable one adds
+          # no security and subtracts usability.
+          #
+          # Consequence worth knowing: whoever *opens* the pull request is
+          # answerable for every path in it. A pull request carrying someone
+          # else's commits is judged against the opener, not the author - so the
+          # Revert button, which authors its pull request to whoever pressed it,
+          # is refused for paths that person does not own.
           rc=0
-          while read -r author; do
-            echo
-            echo "=== @$author ==="
-            python3 .github/access/manage_access.py \
-              check --author "$author" --changed-files changed.txt || rc=1
-          done < authors.txt
+          echo
+          echo "=== @$PR_AUTHOR (opened this pull request) ==="
+          python3 .github/access/manage_access.py \
+            check --author "$PR_AUTHOR" --changed-files changed.txt || rc=1
 
           if [ "$rc" -ne 0 ]; then
             echo
-            echo "::error::at least one commit author is not listed in access.yaml for" \
-                 "a path this pull request changes. Nothing was merged and nothing was" \
-                 "federated. Either drop those paths, or have an administrator add the" \
-                 "author to the owning group in .github/access/access.yaml."
+            echo "::error::@$PR_AUTHOR opened this pull request but is not listed in" \
+                 "access.yaml for a path it changes. Nothing was merged and nothing" \
+                 "was federated. Either drop those paths, or have an administrator add" \
+                 "@$PR_AUTHOR to the owning group in .github/access/access.yaml."
           fi
           exit "$rc"
 

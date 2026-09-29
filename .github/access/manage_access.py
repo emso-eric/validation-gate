@@ -13,9 +13,13 @@ API is concerned, edit ``gate.py``. Two mechanisms close that, and they are
 layered on purpose:
 
   pr-gate.yml     the `authorize` job calls this script as a required check on
-                  every pull request, from the base branch's copy. A pull
-                  request whose author does not own a changed path cannot be
-                  merged. This is the enforcement.
+                  every pull request, from the base branch's copy, passing
+                  ``github.event.pull_request.user.login`` - the authenticated
+                  account that opened it. A pull request whose opener does not
+                  own a changed path cannot be merged. This is the enforcement.
+                  Commit authorship is deliberately not an input: it comes from
+                  the commit's own ``author.email``, which ``git commit
+                  --author`` sets to anything.
   validate.yml    the same script again, after the push has landed, failing
                   the job so the gate never runs and nothing reaches the
                   central ERDDAP. A brake rather than a lock, and deliberately
