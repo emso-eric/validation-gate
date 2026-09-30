@@ -60,17 +60,16 @@ You only need a body under a datasetID to override one of those defaults.
 The base URL of your ERDDAP. Normalised: a trailing slash is stripped and
 `/erddap` is appended when missing.
 
-It must be `http://` or `https://`, carry no `user:password@`, and name a server
-reachable on the **public internet**. The gate fetches this URL from the central
-node, so a private, loopback or link-local address — `127.0.0.1`, `10.x`,
-`192.168.x`, `169.254.x`, or a hostname resolving to one — is refused, with the
-resolved address named in the error. The same applies to a per-dataset `url`
-override.
+It must be `http://` or `https://` and must not carry a `user:password@` — a
+credential here would be committed to a public repository. The same applies to a
+per-dataset `url` override. Both plain `http://` and `https://` are accepted; two
+federated services use `http://` today.
 
-Both plain `http://` and `https://` are accepted; two federated services use
-`http://` today. If your facility genuinely serves ERDDAP on an address only the
-central node can reach internally, that is an administrator decision — see
-`ALLOWED_PRIVATE_HOSTS` in `validation_gate/federation.py`.
+A **private or internal address is allowed** — an IP, or an internal hostname.
+The central node is the only host that has to reach your ERDDAP, so if it can
+reach you over the internal network, that is enough to federate. Bear in mind
+that the gate then reaches it from the central node, so the address has to be
+resolvable and routable *from there*, not from your own machine.
 
 ### `service.datasets` — required, at least one
 
@@ -164,7 +163,7 @@ name, rather than guessed at.
 | `must be empty or a mapping` | a scalar under a datasetID, e.g. `MY_ID: tabledap` |
 | `must start with http:// or https://` | a missing scheme, or one that is not HTTP |
 | `must not carry credentials` | a `user:password@` in the URL |
-| `is not a public address` | the URL names a private, loopback or link-local address |
+| `has no hostname` | the URL has a scheme but no host, e.g. `http:///erddap` |
 
 Note the last one: `MY_ID: tabledap` is **not** how you set the protocol.
 Use `MY_ID:` followed by an indented `type: griddap`.
