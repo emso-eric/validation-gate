@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import concurrent.futures as futures
 import contextlib
+import csv
 import io
 import json
 import logging
@@ -109,6 +110,31 @@ def shuffle_datasets(datasets: list[Dataset]) -> list[Dataset]:
             if index < len(queue):
                 interleaved.append(queue[index])
     return interleaved
+
+
+def write_status_csv(rows: list[dict], path: str) -> None:
+    """
+    Dump dataset-status *rows* (as returned by GateDatabase.list_by_status)
+    to a CSV at *path*. Same shape as `gate.py list --out`, so the two are
+    never allowed to drift apart.
+    """
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=[
+            "datasetID", "facility", "url",
+            "required_score", "keywords_passed", "operational_passed",
+        ])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({
+                "datasetID":           row["dataset_id"],
+                "facility":            row["facility"],
+                "url":                 row["source_url"],
+                "required_score":      row["required_score"],
+                "keywords_passed":     row["keywords_passed"],
+                "operational_passed":  row["operational_passed"],
+            })
+    logger.info("wrote %s (%d rows)", path, len(rows))
 
 
 class ValidationGate:
@@ -209,6 +235,12 @@ class ValidationGate:
             "datasets.xml build=%.1fs  avg/dataset (excl. unreachable)=%.2fs",
             run_id, total_s, avg_all, build_s, avg_excl,
         )
+
+        # Every run - new, pending or all - leaves the same full status
+        # snapshot behind, equivalent to `gate.py list all --out`. Served
+        # statically by the erddap container, so reading it needs no
+        # database access.
+        write_status_csv(db.list_by_status(None), self.cfg.path("status_csv"))
 
         return 0 if counts["blocked"] + counts["unreachable"] + counts["unhandled"] == 0 else 1
 
