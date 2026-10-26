@@ -62,6 +62,8 @@ services:
       - ./erddap/data:/erddapData
       - ./erddap/logo.png:/usr/local/tomcat/webapps/erddap/images/logo.png:ro
       - ./erddap/favicon.ico:/usr/local/tomcat/webapps/erddap/images/favicon.ico:ro
+      - ./erddap/static:/usr/local/tomcat/webapps/static:ro
+
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/erddap/index.html || exit 1"]
       interval: 30s

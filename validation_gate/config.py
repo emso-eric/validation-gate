@@ -86,6 +86,10 @@ class Config:
     datasets_xml: str = "erddap/datasets.xml"
     erddap_data_dir: str = "erddap/data"
     templates_dir: str = "erddap/templates"
+    # Rewritten after every `run`, regardless of how: the central node's own
+    # status snapshot, served statically by the erddap container so it does
+    # not need database access to read.
+    status_csv: str = "erddap/static/validation_gate.csv"
     # The engine resolves its cache by the literal name '.emso' relative to the
     # working directory, which is why this path ends in it. Keep it on
     # persistent storage: a cold cache re-downloads ~50 resources.

@@ -36,6 +36,11 @@ config:
   datasets_xml: erddap/datasets.xml
   erddap_data_dir: erddap/data
   templates_dir: erddap/templates
+  # Rewritten after every `run` - new, pending or all - to the full status of
+  # every declared dataset, equivalent to `gate.py list all --out`. Served
+  # statically by the erddap container, so reading it needs no database
+  # access.
+  status_csv: erddap/static/validation_gate.csv
   # The compliance engine resolves its cache by the literal name '.emso'
   # relative to its working directory, which is why this path ends in it. Keep
   # it on persistent storage: a cold cache re-downloads ~50 resources.

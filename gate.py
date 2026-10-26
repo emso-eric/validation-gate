@@ -31,7 +31,6 @@ license: MIT
 from __future__ import annotations
 
 import argparse
-import csv
 import logging
 import os
 import re
@@ -43,7 +42,7 @@ from datetime import datetime
 
 from validation_gate import (
     Config, ConfigError, DatabaseError, ErddapError, ErddapHelper,
-    RegistryError, ValidationGate, __version__,
+    RegistryError, ValidationGate, write_status_csv, __version__,
 )
 from validation_gate.config import DATABASE_ENV_FILE, read_env_file
 
@@ -643,22 +642,7 @@ def cmd_list(args: argparse.Namespace, cfg: Config) -> int:
     print(f"{len(rows)} dataset(s) across {n_facilities} facilit(y/ies)")
 
     if args.out:
-        with open(args.out, "w", newline="", encoding="utf-8") as fh:
-            writer = csv.DictWriter(fh, fieldnames=[
-                "datasetID", "facility", "url",
-                "required_score", "keywords_passed", "operational_passed",
-            ])
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({
-                    "datasetID":           row["dataset_id"],
-                    "facility":            row["facility"],
-                    "url":                 row["source_url"],
-                    "required_score":      row["required_score"],
-                    "keywords_passed":     row["keywords_passed"],
-                    "operational_passed":  row["operational_passed"],
-                })
-        logger.info("wrote %s (%d rows)", args.out, len(rows))
+        write_status_csv(rows, args.out)
 
     return EXIT_OK
 

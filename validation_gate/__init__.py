@@ -20,6 +20,7 @@ from .erddap import ErddapError, ErddapHelper
 from .federation import Dataset, Federation, RegistryError
 from .validation_gate import (
     VALIDATION_STATES, ValidationGate, ValidationReport, shuffle_datasets,
+    write_status_csv,
 )
 
 __version__ = "0.2.0"
@@ -30,5 +31,5 @@ __all__ = [
     "GateDatabase", "DatabaseError",
     "ErddapHelper", "ErddapError",
     "ValidationGate", "ValidationReport", "VALIDATION_STATES",
-    "shuffle_datasets", "__version__",
+    "shuffle_datasets", "write_status_csv", "__version__",
 ]
