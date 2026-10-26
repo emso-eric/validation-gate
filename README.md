@@ -106,6 +106,13 @@ Those three numbers, and the specifications version they were measured against
 That file belongs to the central team. You own `federation/`, which says which
 datasets exist.
 
+After every run, the full federation status — every dataset, every facility,
+in that same table — is also written to a static CSV file, rebuilt from
+scratch each time rather than patched. It is meant to be read by other
+tooling that needs to know the current federation status without talking to
+the gate's database; see [`erddap/README.md`](erddap/README.md) for where it
+lives and its exact columns.
+
 When a dataset is blocked, the gate records *every* rule that failed, not just
 the first one — so you get the full list in one go rather than discovering them
 one fix at a time.
@@ -285,7 +292,7 @@ not your metadata. Report it rather than trying to fix your dataset.
 | **Running and deploying the gate** — the CLI, the containers, secrets | [`OPERATIONS.md`](OPERATIONS.md) | maintainers |
 | **The code** — module by module, and how a run flows through it | [`validation_gate/README.md`](validation_gate/README.md) | maintainers |
 | **The database** — schema, views, and how to query the history | [`database/README.md`](database/README.md) | maintainers |
-| **The central ERDDAP** — `datasets.xml` generation and reloads | [`erddap/README.md`](erddap/README.md) | maintainers |
+| **The central ERDDAP** — `datasets.xml` generation, reloads, and the `validation_gate.csv` status snapshot served for other systems to read | [`erddap/README.md`](erddap/README.md) | maintainers |
 | **The dashboards** — panels, provisioning, and the views behind them | [`grafana/README.md`](grafana/README.md) | maintainers |
 
 ---

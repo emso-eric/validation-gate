@@ -17,6 +17,8 @@ erddap/
 ├── templates/
 │   ├── datasets_header.xml everything before the first dataset
 │   └── datasets_footer.xml </erddapDatasets>
+├── static/                 GENERATED — served read-only at /static
+│   └── validation_gate.csv full federation status snapshot
 ├── logo.png, favicon.ico   branding, mounted read-only
 └── .env                    ERDDAP tuning
 ```
@@ -85,6 +87,33 @@ parse check before the write is what makes that acceptable.
 **Encoding is `ISO-8859-1` with `errors="xmlcharrefreplace"`**, matching the
 templates, which are read with the same encoding. Anything outside Latin-1 is
 emitted as a numeric character reference.
+
+---
+
+## `static/validation_gate.csv` is a status snapshot
+
+Rewritten at the end of **every** run — `new`, `pending` or `all` alike — by
+`write_status_csv()` in `validation_gate/validation_gate.py`. Unlike
+`datasets.xml` it is never scoped to what that run checked: it is built from
+`GateDatabase.list_by_status(None)`, i.e. the newest validation row for every
+dataset in the federation, so an incremental run still leaves behind the full
+picture rather than a partial one.
+
+```
+datasetID,facility,url,required_score,keywords_passed,operational_passed
+OBSEA_seabed_station_TS_L1b,Balearic_Sea,https://data.obsea.es/erddap/tabledap/OBSEA_seabed_station_TS_L1b,97.0,True,True
+```
+
+Same shape as `gate.py list --out`, deliberately — the two code paths share
+`write_status_csv()` and are never allowed to drift apart. A dataset that is
+`unreachable` or `unhandled` has no score yet, so `required_score` is empty,
+never `0`.
+
+This is **the** way for anything outside this repository to read the current
+federation status: the file is served statically by the `erddap` container's
+read-only bind mount (`./erddap/static:/usr/local/tomcat/webapps/static:ro`
+in `docker-compose.yaml`), reachable at `/static/validation_gate.csv` on the
+ERDDAP host, with no PostgreSQL access and no gate code involved.
 
 ---
 
