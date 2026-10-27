@@ -5,6 +5,6 @@
 # derived as <url>/<type>/<datasetID>. A body appears only where the fragment
 # needed one.
 service:
-  url: http://erddap.w1m3a.cnr.it/erddap
+  url: https://erddap.w1m3a.cnr.it/erddap
   datasets:
     W1M3A_emso:
