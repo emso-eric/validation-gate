@@ -7,11 +7,4 @@
 service:
   url: http://erddap.w1m3a.cnr.it/erddap
   datasets:
-    W1M3A_deploy01:
-    W1M3A_deploy02:
-    W1M3A_deploy03:
-    W1M3A_deploy04:
-    W1M3A_deploy05:
-    W1M3A_deploy06:
-    W1M3A_deploy07:
-    W1M3A_deploy08:
+    W1M3A_emso:
